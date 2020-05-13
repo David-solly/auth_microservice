@@ -15,10 +15,10 @@ message TokenAffectRequest{
 }
 
 message TokenAffectResponse{
-    oneof affected{
+    
     bool effectApplied=1;
     ServiceError error=2;
-    }
+    
 }
 
 enum TokenState{
@@ -55,10 +55,10 @@ message TokenRequest{
 }
 
 message TokenResponse{
-    oneof response{
+   
         TokenPair tokens=1;
         ServiceError error=2;
-    }
+    
 }
 
 message TokenPair{

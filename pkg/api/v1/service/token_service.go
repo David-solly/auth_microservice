@@ -25,10 +25,6 @@ type ServiceError struct {
 	Code  int    `json:"code,omitempty"`
 }
 
-func (at AccessTokens) isResponse() {}
-
-func (at ServiceError) isResponse() {}
-
 type TokenDetails struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -44,7 +40,7 @@ type TokenClaim struct {
 }
 
 type TokenServiceInterface interface {
-	Generate(ctx context.Context, claims map[string]interface{}) (*AccessTokens, error)
+	Generate(ctx context.Context, claims map[string]string) (*AccessTokens, error)
 	// VerifyToken(ctx context.Context, in *TokenVerifyRequest, opts ...grpc.CallOption) (*TokenVerifyResponse, error)
 	// RenewTokens(ctx context.Context, in *TokenRenewRequest, opts ...grpc.CallOption) (*TokenResponse, error)
 	// AffectToken(ctx context.Context, in *TokenAffectRequest, opts ...grpc.CallOption) (*TokenAffectResponse, error)

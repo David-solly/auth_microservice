@@ -9,15 +9,12 @@ import (
 )
 
 type TokenRequest struct {
-	Claims map[string]*interface{}
+	Claims map[string]string
 }
 
 type TokenResponse struct {
-	Response TokenResponseInterface
-}
-
-type TokenResponseInterface interface {
-	isResponse()
+	Response AccessTokens
+	Error    ServiceError
 }
 
 type TokenServiceEndpoints struct {
@@ -33,11 +30,11 @@ func MakeTokenServiceEndpoint(svc TokenServiceInterface) endpoint.Endpoint {
 		if err != nil {
 			return nil, err
 		}
-		return TokenResponse{Response: tkns}, nil
+		return TokenResponse{Response: *tkns}, nil
 	}
 }
 
-func (te *TokenServiceEndpoints) Generate(ctx context.Context, claims map[string]interface{}) (*AccessTokens, error) {
+func (te *TokenServiceEndpoints) Generate(ctx context.Context, claims map[string]string) (*AccessTokens, error) {
 	req := TokenRequest{Claims: claims}
 
 	resp, err := te.Endpoint(ctx, req)
@@ -46,9 +43,9 @@ func (te *TokenServiceEndpoints) Generate(ctx context.Context, claims map[string
 	}
 
 	tokenRespone := resp.(TokenResponse)
-	response := tokenRespone.Response.(AccessTokens)
-	if response.AccessToken == "" {
-		return nil, errors.New(fmt.Sprintf("Response was errors [%v]", tokenRespone.Response))
+
+	if tokenRespone.Response.AccessToken == "" {
+		return nil, errors.New(fmt.Sprintf("Response was errors [%v]", tokenRespone.Error))
 	}
 
 	return &response, nil
