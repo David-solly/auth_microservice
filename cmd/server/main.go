@@ -1,5 +1,10 @@
 package main
 
+import (
+	"fmt"
+)
+
 func main() {
-	print("Hello world server")
+	rs := TokenResponse{}
+	fmt.Printf("Hello world server %v", rs)
 }

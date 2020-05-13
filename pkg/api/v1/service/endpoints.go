@@ -43,8 +43,8 @@ func (te TokenServiceEndpoints)Generate(ctx context.Context, claims map[string]i
 		return nil,err
 	}
 
-	tokenRespone,err1:=resp.(TokenResponse)
-	if err1 !=nil{
+	tokenRespone:=resp.(TokenResponse)
+	if tokenRespone !=nil{
 		return nil,err1
 	}
 	
