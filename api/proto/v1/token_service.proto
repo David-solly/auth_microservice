@@ -6,9 +6,9 @@ import "google/protobuf/any.proto";
 
 service TokenService{
     rpc Generate(TokenRequest)returns (TokenResponse);
-    rpc VerifyToken(TokenVerifyRequest) returns (TokenVerifyResponse);
-    rpc RenewTokens(TokenRenewRequest) returns (TokenResponse);
-    rpc AffectToken(TokenAffectRequest)returns (TokenAffectResponse);
+    // rpc VerifyToken(TokenVerifyRequest) returns (TokenVerifyResponse);
+    // rpc RenewTokens(TokenRenewRequest) returns (TokenResponse);
+    // rpc AffectToken(TokenAffectRequest)returns (TokenAffectResponse);
 }
 
 message TokenAffectRequest{
@@ -52,13 +52,8 @@ message TokenRenewRequest{
     string refreshToken=1;
 }
 
-message TokenClaim{
-    string key=1;
-    google.protobuf.Any value=2;
-
-}
 message TokenRequest{
-   repeated TokenClaim claims=1;
+   map <string, google.protobuf.Any> claims=1;
 }
 
 message TokenResponse{
