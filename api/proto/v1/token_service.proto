@@ -2,8 +2,6 @@ syntax="proto3";
 
 package v1;
 
-import "google/protobuf/any.proto";
-
 service TokenService{
     rpc Generate(TokenRequest)returns (TokenResponse);
     // rpc VerifyToken(TokenVerifyRequest) returns (TokenVerifyResponse);
@@ -53,7 +51,7 @@ message TokenRenewRequest{
 }
 
 message TokenRequest{
-   map <string, google.protobuf.Any> claims=1;
+   map <string, string> claims=1;
 }
 
 message TokenResponse{

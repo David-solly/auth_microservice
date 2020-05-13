@@ -9,7 +9,7 @@ import (
 )
 
 type TokenRequest struct {
-	Claims map[string]interface{}
+	Claims map[string]*interface{}
 }
 
 type TokenResponse struct {
