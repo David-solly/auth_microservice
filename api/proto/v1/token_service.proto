@@ -52,8 +52,13 @@ message TokenRenewRequest{
     string refreshToken=1;
 }
 
+message TokenClaim{
+    string key=1;
+    google.protobuf.Any value=2;
+
+}
 message TokenRequest{
-    repeated TokenClaim claims=1;
+   repeated TokenClaim claims=1;
 }
 
 message TokenResponse{
@@ -61,11 +66,6 @@ message TokenResponse{
         TokenPair tokens=1;
         ServiceError error=2;
     }
-}
-
-message TokenClaim{
-    string key=1;
-    repeated google.protobuf.Any value=2;
 }
 
 message TokenPair{
