@@ -1,7 +1,8 @@
-package v1.service
+package service
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -20,13 +21,13 @@ type AccessTokens struct {
 }
 
 type ServiceError struct {
-	Error   string        `json:"error,omitempty"`
-	Code    int           `json:"code,omitempty"`
+	Error string `json:"error,omitempty"`
+	Code  int    `json:"code,omitempty"`
 }
 
-func(at *AccessTokens)isResponse(){}
+func (at AccessTokens) isResponse() {}
 
-func(at *ServiceError)isResponse(){}
+func (at ServiceError) isResponse() {}
 
 type TokenDetails struct {
 	AccessToken  string `json:"access_token"`
@@ -37,8 +38,8 @@ type TokenDetails struct {
 	RtExpiry     int64  `json:"rt_expiry"`
 }
 
-type TokenClaim struct{
-	Claim string `json:"claim"`
+type TokenClaim struct {
+	Claim string      `json:"claim"`
 	Value interface{} `json:"value"`
 }
 
@@ -62,10 +63,7 @@ func (ts *TokenService) Generate(ctx context.Context, claims map[string]interfac
 	td.RefreshUUID = uuid.NewV4().String()
 
 	// create access token
-	atClaims := jwt.MapClaims{}
-	if ok:=mergeClaims(atClaims,claims);!ok{
-		return nil, error.New("Error adding claims to new token")
-	}
+	atClaims := mergeClaims(claims)
 	atClaims["authorize"] = true
 	atClaims["access_uuid"] = td.AccessUUID
 	atClaims["exp"] = td.AtExpiry
@@ -76,12 +74,8 @@ func (ts *TokenService) Generate(ctx context.Context, claims map[string]interfac
 	}
 
 	//create refresh token
-	rtClaims := jwt.MapClaims{}
-	
-	if ok:=mergeClaims(rtClaims,claims);!ok{
-		return nil, error.New("Error adding claims to new token")
-	}
-	rtClaims["user_id"] = id
+	rtClaims := mergeClaims(claims)
+
 	rtClaims["refresh_uuid"] = td.RefreshUUID
 	rtClaims["exp"] = td.RtExpiry
 	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
@@ -93,21 +87,22 @@ func (ts *TokenService) Generate(ctx context.Context, claims map[string]interfac
 	td.AccessToken = token
 	td.RefreshToken = rtoken
 
-	tokens := storeJWTMeta(&td)
+	tokens := storeJWTMeta(td)
 
 	return tokens, nil
 
 }
 
-func mergeClaims(items *jwt.MapClaims,claims )bool{
-	for claim,value:= range(claims){
-		items[claim]=value
+func mergeClaims(claims map[string]interface{}) jwt.MapClaims {
+	c := jwt.MapClaims{}
+	for claim, value := range claims {
+		c[claim] = value
 	}
-	return true
+	return c
 }
 
-func storeJWTMeta(td *TokenDetails) *AccessTokens {
-	fmt.Printf("Storing tokens : %v",td)
+func storeJWTMeta(td TokenDetails) *AccessTokens {
+	fmt.Printf("Storing tokens : %v", td)
 	// storage ...
 	return &AccessTokens{AccessToken: td.AccessToken, RefreshToken: td.RefreshToken}
 }
