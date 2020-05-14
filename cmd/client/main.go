@@ -12,23 +12,30 @@ import (
 	"google.golang.org/grpc"
 )
 
-func main() {
+func makeConnection(conn *grpc.ClientConn) token_grpc.TokenServiceInterface {
 
-	var (
-		grpcAddr = flag.String("addr", ":8081",
-			"gRPC address")
-	)
-	flag.Parse()
-	ctx := context.Background()
+	tokenService := grpcClient.New(conn)
+	return tokenService
+}
+
+func dialConnection(grpcAddr *string) *grpc.ClientConn {
+
 	conn, err := grpc.Dial(*grpcAddr, grpc.WithInsecure(),
 		grpc.WithTimeout(1*time.Second))
 
 	if err != nil {
 		log.Fatalln("gRPC dial:", err)
+		return nil
 	}
-	defer conn.Close()
+	return conn
+}
 
-	tokenService := grpcClient.New(conn)
+func runCmd(add *string) {
+
+	ctx := context.Background()
+	conn := dialConnection(add)
+	tokenService := makeConnection(conn)
+	defer conn.Close()
 	args := flag.Args()
 	var cmd string
 	cmd, args = pop(args)
@@ -36,6 +43,7 @@ func main() {
 	switch cmd {
 	case "Generate":
 		claims := make(map[string]string)
+		var claim, value string
 
 		for r := 0; r <= len(args); r++ {
 			var claim, value string
@@ -44,11 +52,25 @@ func main() {
 			value, args = pop(args)
 			claims[claim] = value
 		}
+		claim, args = pop(args)
+		value, args = pop(args)
+		claims[claim] = value
 
-		lorem(ctx, tokenService, claims)
+		generateToken(ctx, tokenService, claims)
 	default:
 		log.Fatalln("unknown command", cmd)
 	}
+}
+
+func main() {
+	var (
+		grpcAddr = flag.String("addr", ":8081",
+			"gRPC address")
+	)
+	flag.Parse()
+
+	go runCmd(grpcAddr)
+	rest(grpcAddr)
 }
 
 // parse command line argument one by one
@@ -59,11 +81,13 @@ func pop(s []string) (string, []string) {
 	return s[0], s[1:]
 }
 
-// call lorem service
-func lorem(ctx context.Context, service token_grpc.TokenServiceInterface, claims map[string]string) {
+// call generateToken service
+func generateToken(ctx context.Context, service token_grpc.TokenServiceInterface, claims map[string]string) (*token_grpc.AccessTokens, error) {
 	mesg, err := service.Generate(ctx, claims)
 	if err != nil {
 		log.Fatalln(err.Error())
+		return nil, err
 	}
 	fmt.Println(mesg)
+	return mesg, nil
 }
