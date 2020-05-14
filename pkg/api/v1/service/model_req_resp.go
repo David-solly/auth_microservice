@@ -23,7 +23,7 @@ func EncodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, err
 	resp := r.(TokenResponse)
 	return &pb.TokenResponse{
 		Error: &pb.ServiceError{
-			Error: resp.Error.Error, Code: resp.Error.Code},
+			Error: resp.Error.Error, Code: int32(resp.Error.Code)},
 		Tokens: &pb.TokenPair{
 			AuthToken:    resp.Response.AccessToken,
 			RefreshToken: resp.Response.RefreshToken}}, nil

@@ -34,7 +34,7 @@ func MakeTokenServiceEndpoint(svc TokenServiceInterface) endpoint.Endpoint {
 	}
 }
 
-func (te *TokenServiceEndpoints) Generate(ctx context.Context, claims map[string]string) (*AccessTokens, error) {
+func (te TokenServiceEndpoints) Generate(ctx context.Context, claims map[string]string) (*AccessTokens, error) {
 	req := TokenRequest{Claims: claims}
 
 	resp, err := te.Endpoint(ctx, req)
@@ -48,6 +48,6 @@ func (te *TokenServiceEndpoints) Generate(ctx context.Context, claims map[string
 		return nil, errors.New(fmt.Sprintf("Response was errors [%v]", tokenRespone.Error))
 	}
 
-	return &response, nil
+	return &tokenRespone.Response, nil
 
 }

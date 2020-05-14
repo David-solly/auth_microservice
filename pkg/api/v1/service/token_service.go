@@ -49,7 +49,7 @@ type TokenServiceInterface interface {
 type TokenService struct {
 }
 
-func (ts *TokenService) Generate(ctx context.Context, claims map[string]interface{}) (*AccessTokens, error) {
+func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (*AccessTokens, error) {
 
 	td := TokenDetails{}
 	td.AtExpiry = time.Now().Add(time.Minute * 15).Unix()
@@ -84,12 +84,13 @@ func (ts *TokenService) Generate(ctx context.Context, claims map[string]interfac
 	td.RefreshToken = rtoken
 
 	tokens := storeJWTMeta(td)
+	fmt.Printf("token details \nAT:{%v}\nRT:{%v}\n", token, rtoken)
 
 	return tokens, nil
 
 }
 
-func mergeClaims(claims map[string]interface{}) jwt.MapClaims {
+func mergeClaims(claims map[string]string) jwt.MapClaims {
 	c := jwt.MapClaims{}
 	for claim, value := range claims {
 		c[claim] = value
