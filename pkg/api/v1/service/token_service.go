@@ -103,7 +103,7 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 	td.AccessToken = token
 	td.RefreshToken = rtoken
 
-	tokens, err := CreateAuth(rtClaims["id"].(string), &td)
+	tokens, err := createAuth(rtClaims["id"].(string), &td)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func mergeClaims(claims map[string]string) jwt.MapClaims {
 	return c
 }
 
-func CreateAuth(userid string, td *TokenDetails) (*AccessTokens, error) {
+func createAuth(userid string, td *TokenDetails) (*AccessTokens, error) {
 	at := time.Unix(td.AtExpiry, 0) //converting Unix to UTC(to Time object)
 	rt := time.Unix(td.RtExpiry, 0)
 	now := time.Now()
@@ -139,4 +139,13 @@ func CreateAuth(userid string, td *TokenDetails) (*AccessTokens, error) {
 	// storage ...
 	return &AccessTokens{AccessToken: td.AccessToken, RefreshToken: td.RefreshToken}, nil
 
+}
+
+func deleteAuth(uuid string) (int64, error) {
+	idDeleted, err := client.Del(uuid).Result()
+	if err != nil {
+		return -1, err
+	}
+
+	return idDeleted, nil
 }

@@ -18,21 +18,24 @@ func makeConnection(conn *grpc.ClientConn) token_grpc.TokenServiceInterface {
 	return tokenService
 }
 
-func dialConnection(grpcAddr *string) *grpc.ClientConn {
+func dialConnection(grpcAddr *string) (*grpc.ClientConn, error) {
 
 	conn, err := grpc.Dial(*grpcAddr, grpc.WithInsecure(),
 		grpc.WithTimeout(1*time.Second))
 
 	if err != nil {
 		log.Fatalln("gRPC dial:", err)
-		return nil
+		return nil, err
 	}
-	return conn
+	return conn, nil
 }
 
-func runCmd(add *string) {
+func runCmd(add *string) error {
 	ctx := context.Background()
-	conn := dialConnection(add)
+	conn, err := dialConnection(add)
+	if err != nil {
+		return err
+	}
 	tokenService := makeConnection(conn)
 	defer conn.Close()
 	args := flag.Args()
@@ -60,6 +63,7 @@ func runCmd(add *string) {
 	default:
 		log.Fatalln("unknown command", cmd)
 	}
+	return nil
 }
 
 func main() {
@@ -69,7 +73,7 @@ func main() {
 	)
 	flag.Parse()
 
-	// go runCmd(grpcAddr)
+	//go runCmd(grpcAddr)
 	rest(grpcAddr)
 }
 
