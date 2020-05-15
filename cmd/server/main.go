@@ -21,6 +21,8 @@ func main() {
 		log.Fatal("Server could not load environmental variables")
 	}
 
+	token_grpc.RedisInit()
+
 	print("Starting grpc server...")
 
 	var (

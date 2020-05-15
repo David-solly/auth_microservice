@@ -31,7 +31,6 @@ func dialConnection(grpcAddr *string) *grpc.ClientConn {
 }
 
 func runCmd(add *string) {
-
 	ctx := context.Background()
 	conn := dialConnection(add)
 	tokenService := makeConnection(conn)
@@ -52,6 +51,7 @@ func runCmd(add *string) {
 			value, args = pop(args)
 			claims[claim] = value
 		}
+
 		claim, args = pop(args)
 		value, args = pop(args)
 		claims[claim] = value
@@ -69,7 +69,7 @@ func main() {
 	)
 	flag.Parse()
 
-	go runCmd(grpcAddr)
+	// go runCmd(grpcAddr)
 	rest(grpcAddr)
 }
 

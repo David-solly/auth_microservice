@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/go-redis/redis"
 	"github.com/twinj/uuid"
 )
 
@@ -14,6 +15,25 @@ const (
 	// apiVersion is version of API is provided by server
 	apiVersion = "v1"
 )
+
+var client *redis.Client
+
+func RedisInit() {
+	//Initializing redis
+	dsn := os.Getenv("REDIS_DSN")
+	if len(dsn) == 0 {
+		dsn = "localhost:6379"
+	}
+	client = redis.NewClient(&redis.Options{
+		Addr: dsn, //redis port
+	})
+	_, err := client.Ping().Result()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Redis server - Online ..........")
+}
 
 type AccessTokens struct {
 	AccessToken  string `json:"access_token"`
@@ -83,7 +103,10 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 	td.AccessToken = token
 	td.RefreshToken = rtoken
 
-	tokens := storeJWTMeta(td)
+	tokens, err := CreateAuth(rtClaims["id"].(string), &td)
+	if err != nil {
+		return nil, err
+	}
 	fmt.Printf("token details \nAT:{%v}\nRT:{%v}\n", token, rtoken)
 
 	return tokens, nil
@@ -98,8 +121,22 @@ func mergeClaims(claims map[string]string) jwt.MapClaims {
 	return c
 }
 
-func storeJWTMeta(td TokenDetails) *AccessTokens {
+func CreateAuth(userid string, td *TokenDetails) (*AccessTokens, error) {
+	at := time.Unix(td.AtExpiry, 0) //converting Unix to UTC(to Time object)
+	rt := time.Unix(td.RtExpiry, 0)
+	now := time.Now()
+
+	errAccess := client.Set(td.AccessUUID, userid, at.Sub(now)).Err()
+	if errAccess != nil {
+		return nil, errAccess
+	}
+	errRefresh := client.Set(td.RefreshUUID, userid, rt.Sub(now)).Err()
+	if errRefresh != nil {
+		return nil, errRefresh
+	}
+
 	fmt.Printf("Storing tokens : %v", td)
 	// storage ...
-	return &AccessTokens{AccessToken: td.AccessToken, RefreshToken: td.RefreshToken}
+	return &AccessTokens{AccessToken: td.AccessToken, RefreshToken: td.RefreshToken}, nil
+
 }
