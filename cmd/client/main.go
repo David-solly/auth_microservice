@@ -37,10 +37,14 @@ func runCmd(add *string) error {
 		return err
 	}
 	tokenService := makeConnection(conn)
-	defer conn.Close()
+	//defer conn.Close()
 	args := flag.Args()
 	var cmd string
 	cmd, args = pop(args)
+
+	if len(args) < 2 {
+		print("no cmd args")
+	}
 
 	switch cmd {
 	case "Generate":

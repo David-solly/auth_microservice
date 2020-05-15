@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -70,5 +72,13 @@ func main() {
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		errChan <- fmt.Errorf("%s", <-c)
 	}()
+	notifyOnStart()
 	fmt.Println(<-errChan)
+}
+
+func notifyOnStart() {
+
+	///braodcast start command
+	http.PostForm("localhost:8080/v1/discover/service/BDg7tZZ2WhKPYJgsBeCgBokhUDshPcwNG1P0seddkHnsTbVB4iCTjxctoUjmQ8F1Dg3xCqgewnP5PbGmXMs4zrVvpVFYQQR43wHb", url.Values{})
+
 }

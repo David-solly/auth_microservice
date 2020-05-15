@@ -74,20 +74,17 @@ func initGrpc() {
 		return
 	}
 
-	if conn == nil {
+	if conn1 == nil {
 		log.Panicf("Error etablishing initial connection to grpc server : %v", *address)
 		return
 	}
 
-	if conn.GetState() != connectivity.Ready {
-		log.Panicf("Error etablishing initial connection to grpc server : %v", *address)
-		return
-	}
 	conn = conn1
 	fmt.Printf("Succefully connected to grpc server: %v", conn)
 }
 
 func rest(grpcAddr *string) {
+	address = grpcAddr
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -97,7 +94,6 @@ func rest(grpcAddr *string) {
 		initGrpc()
 	}()
 
-	address = grpcAddr
 	// TODO:
 	//Remove for production, already loads on a different flow
 	//####################
@@ -146,34 +142,28 @@ func serviceConnectionHandler(w http.ResponseWriter, r *http.Request) {
 	serviceID := chi.URLParam(r, "serviceID")
 	if serviceID == os.Getenv("GRPC_ONLINE_CODE") {
 		if conn == nil {
-			go func() {
-				defer func() {
+			go func(w http.ResponseWriter) {
+				defer func(w http.ResponseWriter) {
+
 					if r := recover(); r != nil {
 						fmt.Println("\nRecovered From [", r, "] \n Running a limited service!!!")
 					}
-				}()
+				}(w)
 				initGrpc()
 				confirmService, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is ... restarting", serviceID)})
 				w.Write(confirmService)
-			}()
+			}(w)
 		}
 	}
 
 	if serviceID == os.Getenv("GRPC_OFFLINE_CODE") {
 		if conn != nil {
-			if conn.GetState() == connectivity.Idle || conn.GetState() == connectivity.Connecting {
+			if conn.GetState() == connectivity.Idle || conn.GetState() == connectivity.Connecting || conn.GetState() == connectivity.Ready {
 				conn.Close()
 				conn = nil
 				confirmService, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is disconnecting", serviceID)})
 				w.Write(confirmService)
-				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							fmt.Println("\nRecovered From [", r, "] \n Running a limited service!!!")
-						}
-					}()
-					initGrpc()
-				}()
+
 			}
 		}
 	}
@@ -216,8 +206,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		errorHandler(w, ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest})
 		return
 	}
-
-	initGrpc()
 
 	if user.Username == tUser.Username && user.Password == tUser.Password {
 		if conn == nil {
