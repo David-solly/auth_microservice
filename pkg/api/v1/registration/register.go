@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/consul/api"
 )
 
-func RegisterService(consulAddress, consulPort, advertiseAddress, advertisePort string) (registrar sd.Registrar) {
+func RegisterService(consulAddress, consulPort, advertiseAddress, advertisePort, healthPort string) (registrar sd.Registrar) {
 
 	// Logging domain.
 	var logger log.Logger
@@ -38,8 +38,8 @@ func RegisterService(consulAddress, consulPort, advertiseAddress, advertisePort 
 	}
 
 	check := api.AgentServiceCheck{
-		GRPC:       "" + advertiseAddress + ":" + advertisePort + "grpc.health.v1.Health",
-		Interval:   "7",
+		GRPC:       "" + advertiseAddress + ":" + healthPort + "/" + "grpc.health.v1.Health",
+		Interval:   "7s",
 		Timeout:    "1s",
 		Notes:      "Basic health checks",
 		CheckID:    "health-check-util",

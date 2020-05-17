@@ -15,6 +15,7 @@ import (
 
 	pb "github.com/David-solly/auth_microservice/pkg/api/v1"
 	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
+	token_consul "github.com/David-solly/auth_microservice/pkg/api/v1/registration"
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
@@ -29,16 +30,34 @@ func main() {
 
 	print("Starting grpc server...")
 
+	// parse variable from input command
 	var (
-		gRPCAddr = flag.String("grpc", ":8083",
+		consulAddr          = flag.String("consul.addr", "", "consul address")
+		consulPort          = flag.String("consul.port", "", "consul port")
+		advertiseAddr       = flag.String("advertise.addr", "", "advertise address")
+		advertisePort       = flag.String("advertise.port", "", "advertise port")
+		advertiseHealthPort = flag.String("health.port", "", "health port")
+	)
+	flag.Parse()
+
+	var (
+		gRPCAddr = flag.String("grpc", ""+*advertiseAddr+":"+*advertisePort,
 			"gRPC listen address")
 	)
 
 	flag.Parse()
 	var (
-		gRPCAddrHealth = strings.Replace(*gRPCAddr, ":8083", ":8084", 1)
+		gRPCAddrHealth = strings.Replace(*gRPCAddr, ":"+*advertisePort, ":"+*advertiseHealthPort, 1)
 	)
 	flag.Parse()
+
+	// Register Service to Consul
+	registar := token_consul.RegisterService(*consulAddr,
+		*consulPort,
+		*advertiseAddr,
+		*advertisePort,
+		*advertiseHealthPort)
+
 	ctx := context.Background()
 
 	// init lorem service
@@ -78,6 +97,7 @@ func main() {
 		pb.RegisterTokenServiceServer(gRPCServer, handler)
 		println("started on")
 		fmt.Printf("%v", gRPCServer.GetServiceInfo())
+		registar.Register()
 		errChan <- gRPCServer.Serve(listener)
 	}()
 
@@ -106,8 +126,12 @@ func main() {
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		errChan <- fmt.Errorf("%s", <-c)
 	}()
-	notifyOnStart()
-	fmt.Println(<-errChan)
+	//notifyOnStart()
+	error := <-errChan
+	// deregister service
+	registar.Deregister()
+	log.Fatalln(error)
+
 }
 
 func notifyOnStart() {
