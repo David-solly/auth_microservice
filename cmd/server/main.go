@@ -10,9 +10,11 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	pb "github.com/David-solly/auth_microservice/pkg/api/v1"
+	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
@@ -28,8 +30,13 @@ func main() {
 	print("Starting grpc server...")
 
 	var (
-		gRPCAddr = flag.String("grpc", ":8081",
+		gRPCAddr = flag.String("grpc", ":8083",
 			"gRPC listen address")
+	)
+
+	flag.Parse()
+	var (
+		gRPCAddrHealth = strings.Replace(*gRPCAddr, ":8083", ":8084", 1)
 	)
 	flag.Parse()
 	ctx := context.Background()
@@ -45,6 +52,19 @@ func main() {
 		Endpoint: token_grpc.MakeTokenServiceEndpoint(svc),
 	}
 
+	var svcH token_grpc.Health
+	svcH = token_grpc.HealthService{}
+	// svcH = token_grpc.LoggingMiddlewareHealth(logger)(svcH)
+
+	check := token_grpc.MakeHealthServiceCheckEndpoint(svcH)
+	watch := token_grpc.MakeHealthServiceWatchEndpoint(svcH)
+
+	// check = token_grpc.NewTokenBucketLimitter(rlbucket)(check)
+	endpointsHealth := token_grpc.EndpointsConsul{
+		ConsulHealthCheckEndpoint: check,
+		ConsulHealthWatchEndpoint: watch,
+	}
+
 	//execute grpc server
 	go func() {
 		listener, err := net.Listen("tcp", *gRPCAddr)
@@ -58,6 +78,20 @@ func main() {
 		pb.RegisterTokenServiceServer(gRPCServer, handler)
 		println("started on")
 		fmt.Printf("%v", gRPCServer.GetServiceInfo())
+		errChan <- gRPCServer.Serve(listener)
+	}()
+
+	go func() {
+		fmt.Println("starting health server")
+		listener, err := net.Listen("tcp", gRPCAddrHealth)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		handler := token_grpc.NewGRPCServerHealth(ctx, endpointsHealth)
+		gRPCServer := grpc.NewServer()
+		hc.RegisterHealthServer(gRPCServer, handler)
+		fmt.Printf("Service info %v", gRPCServer.GetServiceInfo())
 		errChan <- gRPCServer.Serve(listener)
 	}()
 

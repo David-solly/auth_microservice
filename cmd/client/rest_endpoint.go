@@ -271,7 +271,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		tokenService := makeConnection(conn)
 
 		claims := make(map[string]string)
-		claims["id"] = fmt.Sprintf("%v", tUser.ID)
+		claims["id"] = fmt.Sprintf("%v", 2)
 
 		tokens, err := generateToken(context.Background(), tokenService, claims)
 		if err != nil {
@@ -290,7 +290,6 @@ func verifyUniqueUser(username string) (bool, error) {
 
 func VerifyTokenIntegrity(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		//Make sure that the token method conform to "SigningMethodHMAC"
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Token signing error, unexpected method: %v", token.Header["alg"])
 		}
@@ -360,16 +359,20 @@ func ExtractTokenMetadata(tokenString string) (*AccessDetails, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
 		accessUuid, ok := claims["access_uuid"].(string)
 		if !ok {
 			return nil, err
 		}
-		userId, err := strconv.ParseUint(fmt.Sprintf("%.f", claims["user_id"]), 10, 64)
+
+		claimID := claims["id"]
+		userId, err := strconv.ParseUint(claimID.(string), 10, 64)
 		if err != nil {
 			return nil, err
 		}
+
 		return &AccessDetails{
 			AccessUuid: accessUuid,
 			UserId:     userId,

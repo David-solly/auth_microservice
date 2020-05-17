@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	hc "github.com/David-solly/auth_microservice/pkg/api/v1/grpc_health_v1"
+	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
 )
 
 const (

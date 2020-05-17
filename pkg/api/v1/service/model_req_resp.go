@@ -4,6 +4,7 @@ import (
 	"context"
 
 	pb "github.com/David-solly/auth_microservice/pkg/api/v1"
+	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
 )
 
 //Encode and Decode Token Request
@@ -36,5 +37,33 @@ func DecodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, err
 			AccessToken:  resp.Tokens.AuthToken,
 			RefreshToken: resp.Tokens.RefreshToken,
 		},
+	}, nil
+}
+
+///Consul Health service checks
+
+func EncodeGRPCHealthServiceRequest(_ context.Context, r interface{}) (interface{}, error) {
+	req := r.(HealthServiceRequest)
+	return &hc.HealthCheckRequest{Service: req.Service}, nil
+}
+
+func DecodeGRPCHealthServiceRequest(ctx context.Context, r interface{}) (interface{}, error) {
+	req := r.(*hc.HealthCheckRequest)
+	return HealthServiceRequest{
+		Service: req.Service,
+	}, nil
+}
+
+//response
+
+func EncodeGRPCHealthServiceResponse(_ context.Context, r interface{}) (interface{}, error) {
+	resp := r.(HealthServiceResponse)
+	return &hc.HealthCheckResponse{Status: hc.HealthCheckResponse_ServingStatus(resp.Status)}, nil
+}
+
+func DecodeGRPCHealthServiceResponse(ctx context.Context, r interface{}) (interface{}, error) {
+	resp := r.(*hc.HealthCheckResponse)
+	return HealthServiceResponse{
+		Status: int(resp.Status),
 	}, nil
 }
