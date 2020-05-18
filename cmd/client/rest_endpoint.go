@@ -11,6 +11,8 @@ import (
 	"time"
 
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
+	ht "github.com/go-kit/kit/transport/http"
+
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -69,8 +71,8 @@ func initGrpc() {
 
 	conn1, err := dialConnection(address)
 	if err != nil {
-		// errorHandler(w, ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
-		log.Panicln("Failed to connect to Token service instance from api gateway")
+		// j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
+		logreturn nil, errors.New(string(j))("Failed to connect to Token service instance from api gateway")
 		return
 	}
 
@@ -121,13 +123,22 @@ func buildRoutes(r *chi.Mux, port string) {
 	// Api endpoints
 	r.Get("/", greetingHandler)
 
-	r.Post("/login", loginHandler)
+	// r.Post("/login", loginHandler)
 
-	r.Post("/register", registerHandler)
+	// r.Post("/register", registerHandler)
 
-	r.Post("/service/{serviceID}", serviceHandler)
+	// r.Post("/service/{serviceID}", serviceHandler)
 
-	r.Post("/v1/discover/service/{serviceID}", serviceConnectionHandler)
+	// r.Post("/v1/discover/service/{serviceID}", serviceConnectionHandler)
+
+	suhandle := ht.NewServer(
+		generateEndpoint,
+		decodeUppercaseRequest,
+		encodeResponse,
+	)
+
+	// r.Handle("/login", signinHandler)
+	r.Handle("/login", suhandle)
 
 	http.ListenAndServe(":"+port, r)
 }
@@ -170,21 +181,21 @@ func serviceConnectionHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func serviceHandler(w http.ResponseWriter, r *http.Request) {
+func serviceHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	token, ok := extractAuthToken(r)
 	if !ok {
-		errorHandler(w, ResponseObject{Error: token, Code: http.StatusUnauthorized})
-		return
+		j, _ := json.Marshal( ResponseObject{Error: token, Code: http.StatusUnauthorized})
+		return nil, errors.New(string(j))
 	}
 	tokenAuth, err := ExtractTokenMetadata(token)
 	if err != nil {
-		errorHandler(w, ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized})
-		return
+		j, _ := json.Marshal( ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized})
+		return nil, errors.New(string(j))
 	}
 	userId, err := FetchAuth(tokenAuth)
 	if err != nil {
-		errorHandler(w, ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized})
-		return
+		j, _ := json.Marshal( ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized})
+		return nil, errors.New(string(j))
 	}
 	td := ServiceRequest{}
 	td.UserID = userId
@@ -203,19 +214,19 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	user := User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		errorHandler(w, ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest})
-		return
+		j, _ := json.Marshal( ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest})
+		return nil, errors.New(string(j))
 	}
 
 	if user.Username == tUser.Username && user.Password == tUser.Password {
 		if conn == nil {
-			errorHandler(w, ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError})
-			return
+			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError})
+			return nil, errors.New(string(j))
 		}
 
 		if conn.GetState() != connectivity.Ready {
-			errorHandler(w, ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
-			return
+			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
+			return nil, errors.New(string(j))
 		}
 
 		tokenService := makeConnection(conn)
@@ -225,16 +236,16 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 		tokens, err := generateToken(context.Background(), tokenService, claims)
 		if err != nil {
-			errorHandler(w, ResponseObject{Error: "Sorry, could not process request", Code: http.StatusUnprocessableEntity})
-			return
+			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request", Code: http.StatusUnprocessableEntity})
+			return nil, errors.New(string(j))
 		}
 
 		_ = json.NewEncoder(w).Encode(ResponseObject{Tokens: tokens})
 		return
 	}
 
-	errorHandler(w, ResponseObject{Error: "Sorry, the login credentials don't match any records", Code: http.StatusNoContent})
-	return
+	j, _ := json.Marshal( ResponseObject{Error: "Sorry, the login credentials don't match any records", Code: http.StatusNoContent})
+	return nil, errors.New(string(j))
 
 }
 
@@ -242,31 +253,31 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	user := User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		errorHandler(w, ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest})
-		return
+		j, _ := json.Marshal( ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest})
+		return nil, errors.New(string(j))
 	}
 
 	if user.PII.Mobile == "" {
-		errorHandler(w, ResponseObject{Error: "Sorry, please include a valid mobile number", Code: http.StatusUnprocessableEntity})
-		return
+		j, _ := json.Marshal( ResponseObject{Error: "Sorry, please include a valid mobile number", Code: http.StatusUnprocessableEntity})
+		return nil, errors.New(string(j))
 	}
 
 	if unique, e := verifyUniqueUser(user.Username); e != nil {
-		errorHandler(w, ResponseObject{Error: "Sorry, could not process request", Code: http.StatusInternalServerError})
-		return
+		j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request", Code: http.StatusInternalServerError})
+		return nil, errors.New(string(j))
 	} else if !unique {
-		errorHandler(w, ResponseObject{Error: "Sorry, the username already exist on our system.", Code: http.StatusAlreadyReported})
-		return
+		j, _ := json.Marshal( ResponseObject{Error: "Sorry, the username already exist on our system.", Code: http.StatusAlreadyReported})
+		return nil, errors.New(string(j))
 
 	} else {
 		if conn == nil {
-			errorHandler(w, ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError})
-			return
+			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError})
+			return nil, errors.New(string(j))
 		}
 
 		if conn.GetState() != connectivity.Ready {
-			errorHandler(w, ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
-			return
+			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
+			return nil, errors.New(string(j))
 		}
 		tokenService := makeConnection(conn)
 
@@ -275,8 +286,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 		tokens, err := generateToken(context.Background(), tokenService, claims)
 		if err != nil {
-			errorHandler(w, ResponseObject{Error: "Sorry, could not process request", Code: http.StatusUnprocessableEntity})
-			return
+			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request", Code: http.StatusUnprocessableEntity})
+			return nil, errors.New(string(j))
 		}
 		_ = json.NewEncoder(w).Encode(ResponseObject{Tokens: tokens})
 		return
