@@ -17,14 +17,15 @@ import (
 	grpcClient "github.com/David-solly/auth_microservice/cmd/client/client"
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/sd"
 	consulsd "github.com/go-kit/kit/sd/consul"
 	"github.com/go-kit/kit/sd/lb"
 	ht "github.com/go-kit/kit/transport/http"
-
 	"github.com/hashicorp/consul/api"
+	"github.com/joho/godotenv"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -114,6 +115,7 @@ func generateToken(ctx context.Context, service token_grpc.TokenServiceInterface
 //parse consule message to endpoint
 func generateTokenFactory(_ context.Context, method, path string) sd.Factory {
 	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
+
 		// if !strings.HasPrefix(instance, "http") {
 		// 	instance = "http://" + instance
 		// }
@@ -144,18 +146,21 @@ func generateTokenFactory(_ context.Context, method, path string) sd.Factory {
 }
 
 func main() {
-	// var (
-	// 	grpcAddr = flag.String("addr", ":8081",
-	// 		"gRPC address")
-	// )
-	// flag.Parse()
+	// TODO:
+	//Remove for production, already loads on a different flow
+	//####################
+	if err := godotenv.Load("../../.env"); err != nil {
+		ilog.Fatalln("Server could not load environmental variables")
+	}
 
-	// //go runCmd(grpcAddr)
-	// rest(grpcAddr)
+	port = os.Getenv("PORT")
+	//####################
+
 	var (
 		consulAddr = flag.String("consul.addr", "", "consul address")
 		consulPort = flag.String("consul.port", "", "consul port")
 	)
+
 	flag.Parse()
 
 	// Logging domain.
@@ -165,6 +170,9 @@ func main() {
 		logger = log.With(logger, "ts", log.DefaultTimestampUTC)
 		logger = log.With(logger, "caller", log.DefaultCaller)
 	}
+
+	//init redis dev
+	RedisInit()
 
 	// Service discovery domain. In this example we use Consul.
 	var client consulsd.Client
@@ -196,22 +204,43 @@ func main() {
 	retry := lb.Retry(1, duration, balancer)
 	generateEndpoint = retry
 
-	// svc := token_grpc.TokenService{}
-
-	// signinHandler := ht.NewServer(
-	// 	makeUppercaseEndpoint(svc),
-	// 	decodeUppercaseRequest,
-	// 	encodeResponse,
-	// )
-
 	suhandle := ht.NewServer(
 		generateEndpoint,
-		decodeUppercaseRequest,
+		loginHandler,
 		encodeResponse,
 	)
 
-	// r.Handle("/login", signinHandler)
+	registerhandle := ht.NewServer(
+		generateEndpoint,
+		registerHandler,
+		encodeResponse,
+	)
+
+	greethandle := ht.NewServer(
+		generateEndpoint,
+		greetingHandler,
+		encodeResponse,
+	)
+
+	servicehandle := ht.NewServer(
+		generateEndpoint,
+		serviceHandler,
+		encodeResponse,
+	)
+
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
+	// Set request timeout
+	r.Use(middleware.Timeout(10 * time.Second))
+
+	// Api endpoints
+	r.Handle("/", greethandle)
 	r.Handle("/login", suhandle)
+	r.Handle("/register", registerhandle)
+	r.Handle("/service/{serviceID}", servicehandle)
 
 	// Interrupt handler.
 	errc := make(chan error)
@@ -235,7 +264,13 @@ func main() {
 // Endpoints are a primary abstraction in go-kit. An endpoint represents a single RPC (method in our service interface)
 func makeBalancedGenerateEndpoint(svc token_grpc.TokenServiceInterface) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		req := request.(token_grpc.TokenRequest)
+		req, k := request.(token_grpc.TokenRequest)
+		if !k {
+			if resp, ok := request.(ResponseObject); ok {
+
+				return resp, nil
+			}
+		}
 		if len(req.Claims) < 1 {
 			return nil, errors.New("No claims to encode")
 		}
@@ -251,7 +286,7 @@ func decodeUppercaseRequest(_ context.Context, r *http.Request) (interface{}, er
 	user := User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		j, _ := json.Marshal(ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest})
+		j, _ := json.Marshal(ResponseObject{Error: "Bad request format", Code: http.StatusBadRequest})
 		return nil, errors.New(string(j))
 	}
 
@@ -289,6 +324,11 @@ func decodeUppercaseRequest(_ context.Context, r *http.Request) (interface{}, er
 }
 
 func encodeResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
+	// if r, o := response.(ResponseObject); o {
+	// 	if r.Error != "" {
+	// 		return json.NewEncoder(w).Encode(r)
+	// 	}
+	// }
 	return json.NewEncoder(w).Encode(response)
 }
 
@@ -306,7 +346,7 @@ func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusInternalServerError)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]string{
 		"error": err.Error(),
 	})
 }

@@ -8,18 +8,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
-	ht "github.com/go-kit/kit/transport/http"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
 	"github.com/go-redis/redis"
-	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
 )
 
 // ResponseObject ...
@@ -33,10 +28,11 @@ type ResponseObject struct {
 }
 
 type User struct {
-	ID       uint64  `json:"id"`
-	Username string  `json:"email"`
-	Password string  `json:"password"`
-	PII      UserPII `json:"details,omitempty"`
+	ID       uint64                 `json:"id"`
+	Username string                 `json:"email"`
+	Password string                 `json:"password"`
+	PII      UserPII                `json:"details,omitempty"`
+	Claims   map[string]interface{} `json:"claims,omitempty"`
 }
 
 type UserPII struct {
@@ -71,8 +67,8 @@ func initGrpc() {
 
 	conn1, err := dialConnection(address)
 	if err != nil {
-		// j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
-		logreturn nil, errors.New(string(j))("Failed to connect to Token service instance from api gateway")
+		// errorHandler(w, ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
+		log.Panicln("Failed to connect to Token service instance from api gateway")
 		return
 	}
 
@@ -96,113 +92,69 @@ func rest(grpcAddr *string) {
 		initGrpc()
 	}()
 
-	// TODO:
-	//Remove for production, already loads on a different flow
-	//####################
-	if err := godotenv.Load("../../.env"); err != nil {
-		log.Fatal("Server could not load environmental variables")
-	}
-
-	port = os.Getenv("PORT")
-	//####################
 	fmt.Printf("auth micro\nServer is running on port %v", port)
-	buildRoutes(router, port)
+	// buildRoutes(router, port)
 }
 
-func buildRoutes(r *chi.Mux, port string) {
-
-	go RedisInit()
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-
-	// Set request timeout
-	r.Use(middleware.Timeout(10 * time.Second))
-
-	// Api endpoints
-	r.Get("/", greetingHandler)
-
-	// r.Post("/login", loginHandler)
-
-	// r.Post("/register", registerHandler)
-
-	// r.Post("/service/{serviceID}", serviceHandler)
-
-	// r.Post("/v1/discover/service/{serviceID}", serviceConnectionHandler)
-
-	suhandle := ht.NewServer(
-		generateEndpoint,
-		decodeUppercaseRequest,
-		encodeResponse,
-	)
-
-	// r.Handle("/login", signinHandler)
-	r.Handle("/login", suhandle)
-
-	http.ListenAndServe(":"+port, r)
-}
-
-func greetingHandler(w http.ResponseWriter, r *http.Request) {
-	greet, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: "Api is up"})
-	w.Write(greet)
-}
-
-func serviceConnectionHandler(w http.ResponseWriter, r *http.Request) {
-
-	serviceID := chi.URLParam(r, "serviceID")
-	if serviceID == os.Getenv("GRPC_ONLINE_CODE") {
-		if conn == nil {
-			go func(w http.ResponseWriter) {
-				defer func(w http.ResponseWriter) {
-
-					if r := recover(); r != nil {
-						fmt.Println("\nRecovered From [", r, "] \n Running a limited service!!!")
-					}
-				}(w)
-				initGrpc()
-				confirmService, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is ... restarting", serviceID)})
-				w.Write(confirmService)
-			}(w)
-		}
-	}
-
-	if serviceID == os.Getenv("GRPC_OFFLINE_CODE") {
-		if conn != nil {
-			if conn.GetState() == connectivity.Idle || conn.GetState() == connectivity.Connecting || conn.GetState() == connectivity.Ready {
-				conn.Close()
-				conn = nil
-				confirmService, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is disconnecting", serviceID)})
-				w.Write(confirmService)
-
-			}
-		}
-	}
+func greetingHandler(_ context.Context, r *http.Request) (interface{}, error) {
+	return ResponseObject{Code: http.StatusOK, Message: "Api is up"}, nil
 
 }
+
+// func serviceConnectionHandler(_ context.Context, r *http.Request) (interface{}, error) {
+
+// 	serviceID := chi.URLParam(r, "serviceID")
+// 	if serviceID == os.Getenv("GRPC_ONLINE_CODE") {
+// 		if conn == nil {
+// 			go func(w http.ResponseWriter) {
+// 				defer func(w http.ResponseWriter) {
+
+// 					if r := recover(); r != nil {
+// 						fmt.Println("\nRecovered From [", r, "] \n Running a limited service!!!")
+// 					}
+// 				}(w)
+// 				initGrpc()
+// 				confirmService, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is ... restarting", serviceID)})
+// 				w.Write(confirmService)
+// 			}(w)
+// 		}
+// 	}
+
+// 	if serviceID == os.Getenv("GRPC_OFFLINE_CODE") {
+// 		if conn != nil {
+// 			if conn.GetState() == connectivity.Idle || conn.GetState() == connectivity.Connecting || conn.GetState() == connectivity.Ready {
+// 				conn.Close()
+// 				conn = nil
+// 				confirmService, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is disconnecting", serviceID)})
+// 				w.Write(confirmService)
+
+// 			}
+// 		}
+// 	}
+
+// }
 
 func serviceHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	token, ok := extractAuthToken(r)
 	if !ok {
-		j, _ := json.Marshal( ResponseObject{Error: token, Code: http.StatusUnauthorized})
-		return nil, errors.New(string(j))
+		return ResponseObject{Error: token, Code: http.StatusUnauthorized}, nil
+
 	}
 	tokenAuth, err := ExtractTokenMetadata(token)
 	if err != nil {
-		j, _ := json.Marshal( ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized})
-		return nil, errors.New(string(j))
+		return ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, nil
+
 	}
 	userId, err := FetchAuth(tokenAuth)
 	if err != nil {
-		j, _ := json.Marshal( ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized})
-		return nil, errors.New(string(j))
+		return ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, nil
+
 	}
 	td := ServiceRequest{}
 	td.UserID = userId
 
 	serviceID := chi.URLParam(r, "serviceID")
-	confirmService, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is up - authorized for id :%s", serviceID, td.UserID)})
-	w.Write(confirmService)
+	return ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is up - authorized for id :%v", serviceID, td.UserID)}, nil
 }
 
 func errorHandler(w http.ResponseWriter, response ResponseObject) {
@@ -210,89 +162,64 @@ func errorHandler(w http.ResponseWriter, response ResponseObject) {
 	w.Write(err)
 }
 
-func loginHandler(w http.ResponseWriter, r *http.Request) {
+func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	user := User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		j, _ := json.Marshal( ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest})
-		return nil, errors.New(string(j))
+		return ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest}, nil
 	}
 
 	if user.Username == tUser.Username && user.Password == tUser.Password {
-		if conn == nil {
-			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError})
-			return nil, errors.New(string(j))
-		}
-
-		if conn.GetState() != connectivity.Ready {
-			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
-			return nil, errors.New(string(j))
-		}
-
-		tokenService := makeConnection(conn)
+		// if conn == nil {
+		// 	return ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError}, nil
+		// }
 
 		claims := make(map[string]string)
 		claims["id"] = fmt.Sprintf("%v", tUser.ID)
+		return token_grpc.TokenRequest{Claims: claims}, nil
 
-		tokens, err := generateToken(context.Background(), tokenService, claims)
-		if err != nil {
-			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request", Code: http.StatusUnprocessableEntity})
-			return nil, errors.New(string(j))
-		}
-
-		_ = json.NewEncoder(w).Encode(ResponseObject{Tokens: tokens})
-		return
 	}
 
-	j, _ := json.Marshal( ResponseObject{Error: "Sorry, the login credentials don't match any records", Code: http.StatusNoContent})
-	return nil, errors.New(string(j))
+	return ResponseObject{Error: "Sorry, the login credentials don't match any records", Code: http.StatusNoContent}, nil
 
 }
 
-func registerHandler(w http.ResponseWriter, r *http.Request) {
+func registerHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	user := User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		j, _ := json.Marshal( ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest})
-		return nil, errors.New(string(j))
+		return ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest}, nil
+
 	}
 
 	if user.PII.Mobile == "" {
-		j, _ := json.Marshal( ResponseObject{Error: "Sorry, please include a valid mobile number", Code: http.StatusUnprocessableEntity})
-		return nil, errors.New(string(j))
+		return ResponseObject{Error: "Sorry, please include a valid mobile number", Code: http.StatusUnprocessableEntity}, nil
+
 	}
 
 	if unique, e := verifyUniqueUser(user.Username); e != nil {
-		j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request", Code: http.StatusInternalServerError})
-		return nil, errors.New(string(j))
+		return ResponseObject{Error: "Sorry, could not process request", Code: http.StatusInternalServerError}, nil
+
 	} else if !unique {
-		j, _ := json.Marshal( ResponseObject{Error: "Sorry, the username already exist on our system.", Code: http.StatusAlreadyReported})
-		return nil, errors.New(string(j))
+		return ResponseObject{Error: "Sorry, the username already exist on our system.", Code: http.StatusAlreadyReported}, nil
 
-	} else {
-		if conn == nil {
-			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError})
-			return nil, errors.New(string(j))
-		}
-
-		if conn.GetState() != connectivity.Ready {
-			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
-			return nil, errors.New(string(j))
-		}
-		tokenService := makeConnection(conn)
-
-		claims := make(map[string]string)
-		claims["id"] = fmt.Sprintf("%v", 2)
-
-		tokens, err := generateToken(context.Background(), tokenService, claims)
-		if err != nil {
-			j, _ := json.Marshal( ResponseObject{Error: "Sorry, could not process request", Code: http.StatusUnprocessableEntity})
-			return nil, errors.New(string(j))
-		}
-		_ = json.NewEncoder(w).Encode(ResponseObject{Tokens: tokens})
-		return
 	}
 
+	claims := user.mapClaims()
+	claims["id"] = fmt.Sprintf("%v", 2)
+	return token_grpc.TokenRequest{Claims: claims}, nil
+
+}
+
+// Maps the claims from the request to be encoded in the jwt
+func (c *User) mapClaims() map[string]string {
+	claims := make(map[string]string)
+	for x, e := range c.Claims {
+		if sc, k := e.(string); k {
+			claims[x] = sc
+		}
+	}
+	return claims
 }
 
 func verifyUniqueUser(username string) (bool, error) {

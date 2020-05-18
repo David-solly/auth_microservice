@@ -80,7 +80,6 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 
 	// create access token
 	atClaims := mergeClaims(claims)
-	atClaims["authorize"] = true
 	atClaims["access_uuid"] = td.AccessUUID
 	atClaims["exp"] = td.AtExpiry
 	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
