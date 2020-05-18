@@ -15,7 +15,11 @@ type TokenServiceEndpoints struct {
 }
 
 type TokenRequest struct {
-	Claims map[string]string
+	Claims map[string]string `json:"claims,omitempty"`
+}
+
+type TokenRequest2 struct {
+	Claims []string `json:"claims,omitempty"`
 }
 
 type TokenResponse struct {

@@ -140,3 +140,9 @@ func notifyOnStart() {
 	http.PostForm("localhost:8080/v1/discover/service/BDg7tZZ2WhKPYJgsBeCgBokhUDshPcwNG1P0seddkHnsTbVB4iCTjxctoUjmQ8F1Dg3xCqgewnP5PbGmXMs4zrVvpVFYQQR43wHb", url.Values{})
 
 }
+
+/*
+run command
+go run . -consul.addr localhost -consul.port 8500 -advertise.addr localhost -advertise.port 8081 -health.port 8082
+
+*/

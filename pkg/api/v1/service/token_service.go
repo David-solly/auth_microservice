@@ -107,7 +107,7 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("token details \nAT:{%v}\nRT:{%v}\n", token, rtoken)
+	// fmt.Printf("token details \nAT:{%v}\nRT:{%v}\n", token, rtoken)
 
 	return tokens, nil
 
@@ -135,7 +135,7 @@ func createAuth(userid string, td *TokenDetails) (*AccessTokens, error) {
 		return nil, errRefresh
 	}
 
-	fmt.Printf("Storing tokens : %v", td)
+	// fmt.Printf("Storing tokens : %v", td)
 	// storage ...
 	return &AccessTokens{AccessToken: td.AccessToken, RefreshToken: td.RefreshToken}, nil
 
