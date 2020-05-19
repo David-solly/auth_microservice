@@ -27,6 +27,11 @@ type TokenResponse struct {
 	Error    ServiceError
 }
 
+type TokenVerifyRequest struct {
+	Token   string `json:"token"`
+	Service string `json:"service,omitempty"`
+}
+
 //wrapper for the endpoints
 type EndpointsConsul struct {
 	ConsulHealthCheckEndpoint endpoint.Endpoint

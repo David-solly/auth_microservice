@@ -17,35 +17,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// ResponseObject ...
-// general response object
-type ResponseObject struct {
-	Error   string                   `json:"error,omitempty"`
-	Code    int                      `json:"code,omitempty"`
-	Tokens  *token_grpc.AccessTokens `json:"tokens,omitempty"`
-	Token   string                   `json:"token,omitempty"`
-	Message string                   `json:"message,omitempty"`
-}
-
-type User struct {
-	ID       uint64                 `json:"id"`
-	Username string                 `json:"email"`
-	Password string                 `json:"password"`
-	PII      UserPII                `json:"details,omitempty"`
-	Claims   map[string]interface{} `json:"claims,omitempty"`
-}
-
-type UserPII struct {
-	Mobile    string `json:"mobile,omitempty"`
-	FirstName string `json:"first_name,omitempty"`
-	LastName  string `json:"last_name,omitempty"`
-}
-
-type ServiceRequest struct {
-	UserID  uint64      `json:"user_id"`
-	Payload interface{} `json:"payload,omitempty"`
-}
-
 var (
 	router = chi.NewRouter()
 	port   = os.Getenv("PORT")
@@ -140,21 +111,30 @@ func serviceHandler(_ context.Context, r *http.Request) (interface{}, error) {
 		return ResponseObject{Error: token, Code: http.StatusUnauthorized}, nil
 
 	}
-	tokenAuth, err := ExtractTokenMetadata(token)
-	if err != nil {
-		return ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, nil
-
+	u, resp, ok := verifyAndGetTokenClaims(token)
+	if !ok {
+		return resp, nil
 	}
-	userId, err := FetchAuth(tokenAuth)
-	if err != nil {
-		return ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, nil
 
-	}
 	td := ServiceRequest{}
-	td.UserID = userId
+	td.UserID = u.UserID
 
 	serviceID := chi.URLParam(r, "serviceID")
 	return ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is up - authorized for id :%v", serviceID, td.UserID)}, nil
+}
+
+func verifyAndGetTokenClaims(token string) (*token_grpc.TokenVerifyResponse, *ResponseObject, bool) {
+	tokenAuth, tokenClaims, err := ExtractTokenMetadata(token)
+	if err != nil {
+		return nil, &ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, false
+	}
+
+	userID, err := FetchAuth(tokenAuth)
+	if err != nil {
+		return nil, &ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
+	}
+
+	return &token_grpc.TokenVerifyResponse{UserID: userID, Claims: tokenClaims}, nil, true
 }
 
 func errorHandler(w http.ResponseWriter, response ResponseObject) {
@@ -226,6 +206,62 @@ func verifyUniqueUser(username string) (bool, error) {
 	return username != tUser.Username, nil
 }
 
+var client *redis.Client
+
+func RedisInit() {
+	//Initializing redis
+	dsn := os.Getenv("REDIS_DSN")
+	if len(dsn) == 0 {
+		dsn = "localhost:6379"
+	}
+	client = redis.NewClient(&redis.Options{
+		Addr: dsn, //redis port
+	})
+	_, err := client.Ping().Result()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Redis server - Online ..........")
+}
+
+// FetchAuth : ensure the token hasn't expired
+func FetchAuth(authD *token_grpc.AccessDetails) (uint64, error) {
+	userid, err := client.Get(authD.AccessUuid).Result()
+	if err != nil {
+		return 0, err
+	}
+	userID, _ := strconv.ParseUint(userid, 10, 64)
+	return userID, nil
+}
+
+func ExtractTokenMetadata(tokenString string) (*token_grpc.AccessDetails, jwt.Claims, error) {
+	token, err := VerifyTokenIntegrity(tokenString)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if ok && token.Valid {
+		accessUuid, ok := claims["access_uuid"].(string)
+		if !ok {
+			return nil, nil, err
+		}
+
+		claimID := claims["id"]
+		userID, err := strconv.ParseUint(claimID.(string), 10, 64)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return &token_grpc.AccessDetails{
+			AccessUuid: accessUuid,
+			UserId:     userID,
+		}, claims, nil
+	}
+	return nil, nil, err
+}
+
 func VerifyTokenIntegrity(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -257,64 +293,4 @@ func extractAuthToken(r *http.Request) (string, bool) {
 	}
 	return token, true
 
-}
-
-var client *redis.Client
-
-func RedisInit() {
-	//Initializing redis
-	dsn := os.Getenv("REDIS_DSN")
-	if len(dsn) == 0 {
-		dsn = "localhost:6379"
-	}
-	client = redis.NewClient(&redis.Options{
-		Addr: dsn, //redis port
-	})
-	_, err := client.Ping().Result()
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("Redis server - Online ..........")
-}
-
-type AccessDetails struct {
-	AccessUuid string
-	UserId     uint64
-}
-
-func FetchAuth(authD *AccessDetails) (uint64, error) {
-	userid, err := client.Get(authD.AccessUuid).Result()
-	if err != nil {
-		return 0, err
-	}
-	userID, _ := strconv.ParseUint(userid, 10, 64)
-	return userID, nil
-}
-
-func ExtractTokenMetadata(tokenString string) (*AccessDetails, error) {
-	token, err := VerifyTokenIntegrity(tokenString)
-	if err != nil {
-		return nil, err
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if ok && token.Valid {
-		accessUuid, ok := claims["access_uuid"].(string)
-		if !ok {
-			return nil, err
-		}
-
-		claimID := claims["id"]
-		userId, err := strconv.ParseUint(claimID.(string), 10, 64)
-		if err != nil {
-			return nil, err
-		}
-
-		return &AccessDetails{
-			AccessUuid: accessUuid,
-			UserId:     userId,
-		}, nil
-	}
-	return nil, err
 }

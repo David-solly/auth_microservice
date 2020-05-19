@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -40,6 +42,11 @@ type AccessTokens struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type AccessDetails struct {
+	AccessUuid string
+	UserId     uint64
+}
+
 type ServiceError struct {
 	Error string `json:"error,omitempty"`
 	Code  int    `json:"code,omitempty"`
@@ -59,9 +66,14 @@ type TokenClaim struct {
 	Value interface{} `json:"value"`
 }
 
+type TokenVerifyResponse struct {
+	UserID uint64     `json:"id"`
+	Status int        `json:"status"`
+	Claims jwt.Claims `json:"claims,omitempty"`
+}
 type TokenServiceInterface interface {
 	Generate(ctx context.Context, claims map[string]string) (*AccessTokens, error)
-	// VerifyToken(ctx context.Context, in *TokenVerifyRequest, opts ...grpc.CallOption) (*TokenVerifyResponse, error)
+	VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*TokenVerifyResponse, error)
 	// RenewTokens(ctx context.Context, in *TokenRenewRequest, opts ...grpc.CallOption) (*TokenResponse, error)
 	// AffectToken(ctx context.Context, in *TokenAffectRequest, opts ...grpc.CallOption) (*TokenAffectResponse, error)
 }
@@ -112,6 +124,25 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 
 }
 
+func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*TokenVerifyResponse, error) {
+
+	return nil, nil
+}
+
+func verifyAndGetTokenClaims(token string) (*TokenVerifyResponse, *ResponseObject, bool) {
+	tokenAuth, tokenClaims, err := ExtractTokenMetadata(token)
+	if err != nil {
+		return nil, &ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, false
+	}
+
+	userID, err := FetchAuth(tokenAuth)
+	if err != nil {
+		return nil, &ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
+	}
+
+	return &token_grpc.TokenVerifyResponse{UserID: userID, Claims: tokenClaims}, nil, true
+}
+
 func mergeClaims(claims map[string]string) jwt.MapClaims {
 	c := jwt.MapClaims{}
 	for claim, value := range claims {
@@ -147,4 +178,65 @@ func deleteAuth(uuid string) (int64, error) {
 	}
 
 	return idDeleted, nil
+}
+
+// FetchAuth : ensure the token hasn't expired
+func FetchAuth(authD *AccessDetails) (uint64, error) {
+	userid, err := client.Get(authD.AccessUuid).Result()
+	if err != nil {
+		return 0, err
+	}
+	userID, _ := strconv.ParseUint(userid, 10, 64)
+	return userID, nil
+}
+
+func ExtractTokenMetadata(tokenString string) (*AccessDetails, jwt.Claims, error) {
+	token, err := VerifyTokenIntegrity(tokenString)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if ok && token.Valid {
+		accessUuid, ok := claims["access_uuid"].(string)
+		if !ok {
+			return nil, nil, err
+		}
+
+		claimID := claims["id"]
+		userID, err := strconv.ParseUint(claimID.(string), 10, 64)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return &AccessDetails{
+			AccessUuid: accessUuid,
+			UserId:     userID,
+		}, claims, nil
+	}
+	return nil, nil, err
+}
+
+func VerifyTokenIntegrity(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Token signing error, unexpected method: %v", token.Header["alg"])
+		}
+		return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+func TokenValid(tokenString string) error {
+	token, err := VerifyTokenIntegrity(tokenString)
+	if err != nil {
+		return err
+	}
+	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
+		return err
+	}
+	return nil
 }
