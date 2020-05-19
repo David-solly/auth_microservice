@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
+	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
 	"github.com/go-kit/kit/endpoint"
 	"google.golang.org/grpc"
 )
@@ -23,8 +24,8 @@ type TokenRequest2 struct {
 }
 
 type TokenResponse struct {
-	Response AccessTokens
-	Error    ServiceError
+	Response models.AccessTokens
+	Error    models.ServiceError
 }
 
 type TokenVerifyRequest struct {
@@ -59,7 +60,7 @@ func MakeTokenServiceEndpoint(svc TokenServiceInterface) endpoint.Endpoint {
 	}
 }
 
-func (te TokenServiceEndpoints) Generate(ctx context.Context, claims map[string]string) (*AccessTokens, error) {
+func (te TokenServiceEndpoints) Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error) {
 	req := TokenRequest{Claims: claims}
 
 	resp, err := te.Endpoint(ctx, req)

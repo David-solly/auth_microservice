@@ -5,6 +5,7 @@ import (
 
 	pb "github.com/David-solly/auth_microservice/pkg/api/v1"
 	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
+	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
 )
 
 //Encode and Decode Token Request
@@ -33,7 +34,7 @@ func EncodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, err
 func DecodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, error) {
 	resp := r.(*pb.TokenResponse)
 	return TokenResponse{
-		Response: AccessTokens{
+		Response: models.AccessTokens{
 			AccessToken:  resp.Tokens.AuthToken,
 			RefreshToken: resp.Tokens.RefreshToken,
 		},

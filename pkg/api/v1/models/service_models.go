@@ -1,5 +1,7 @@
 package models
 
+import "github.com/dgrijalva/jwt-go"
+
 type AccessTokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -30,7 +32,7 @@ type TokenClaim struct {
 }
 
 type TokenVerifyResponse struct {
-	UserID uint64     `json:"id"`
-	Status int        `json:"status"`
-	Claims jwt.Claims `json:"claims,omitempty"`
+	UserID uint64         `json:"id"`
+	Status int            `json:"status"`
+	Claims *jwt.MapClaims `json:"claims,omitempty"`
 }

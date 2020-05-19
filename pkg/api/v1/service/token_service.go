@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	models "github.com/David-solly/auth_microservice/pkg/api/v1/models"
+	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-redis/redis"
 	"github.com/twinj/uuid"
@@ -107,7 +107,7 @@ func verifyAndGetTokenClaims(token string) (*models.TokenVerifyResponse, *models
 		return nil, &models.ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
 	}
 
-	return &models.TokenVerifyResponse{UserID: userID, Claims: tokenClaims}, nil, true
+	return &models.TokenVerifyResponse{UserID: userID, Claims: &tokenClaims}, nil, true
 }
 
 func mergeClaims(claims map[string]string) jwt.MapClaims {
@@ -157,7 +157,7 @@ func FetchAuth(authD *models.AccessDetails) (uint64, error) {
 	return userID, nil
 }
 
-func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.Claims, error) {
+func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.MapClaims, error) {
 	token, err := VerifyTokenIntegrity(tokenString)
 	if err != nil {
 		return nil, nil, err

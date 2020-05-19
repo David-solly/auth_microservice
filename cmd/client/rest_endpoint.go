@@ -117,14 +117,14 @@ func serviceHandler(_ context.Context, r *http.Request) (interface{}, error) {
 		return resp, nil
 	}
 
-	td := ServiceRequest{}
+	td := models.ServiceRequest{}
 	td.UserID = u.UserID
 
 	serviceID := chi.URLParam(r, "serviceID")
-	return models.models.ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is up - authorized for id :%v", serviceID, td.UserID)}, nil
+	return models.ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is up - authorized for id :%v", serviceID, td.UserID)}, nil
 }
 
-func verifyAndGetTokenClaims(token string) (*token_grpc.TokenVerifyResponse, *models.ResponseObject, bool) {
+func verifyAndGetTokenClaims(token string) (*models.TokenVerifyResponse, *models.ResponseObject, bool) {
 	tokenAuth, tokenClaims, err := ExtractTokenMetadata(token)
 	if err != nil {
 		return nil, &models.ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, false
@@ -135,7 +135,7 @@ func verifyAndGetTokenClaims(token string) (*token_grpc.TokenVerifyResponse, *mo
 		return nil, &models.ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
 	}
 
-	return &token_grpc.TokenVerifyResponse{UserID: userID, Claims: tokenClaims}, nil, true
+	return &models.TokenVerifyResponse{UserID: userID, Claims: &tokenClaims}, nil, true
 }
 
 func errorHandler(w http.ResponseWriter, response models.ResponseObject) {
@@ -144,7 +144,7 @@ func errorHandler(w http.ResponseWriter, response models.ResponseObject) {
 }
 
 func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
-	user := User{}
+	user := models.User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 		return models.ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest}, nil
@@ -166,7 +166,7 @@ func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
 }
 
 func registerHandler(_ context.Context, r *http.Request) (interface{}, error) {
-	user := User{}
+	user := models.User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 		return models.ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest}, nil
@@ -192,16 +192,16 @@ func registerHandler(_ context.Context, r *http.Request) (interface{}, error) {
 
 }
 
-// Maps the claims from the request to be encoded in the jwt
-func (c *User) mapClaims() map[string]string {
-	claims := make(map[string]string)
-	for x, e := range c.Claims {
-		if sc, k := e.(string); k {
-			claims[x] = sc
-		}
-	}
-	return claims
-}
+// // Maps the claims from the request to be encoded in the jwt
+// func (c *models.User) mapClaims() map[string]string {
+// 	claims := make(map[string]string)
+// 	for x, e := range c.Claims {
+// 		if sc, k := e.(string); k {
+// 			claims[x] = sc
+// 		}
+// 	}
+// 	return claims
+// }
 
 func verifyUniqueUser(username string) (bool, error) {
 	return username != tUser.Username, nil
@@ -227,7 +227,7 @@ func RedisInit() {
 }
 
 // FetchAuth : ensure the token hasn't expired
-func FetchAuth(authD *token_grpc.AccessDetails) (uint64, error) {
+func FetchAuth(authD *models.AccessDetails) (uint64, error) {
 	userid, err := client.Get(authD.AccessUuid).Result()
 	if err != nil {
 		return 0, err
@@ -236,7 +236,7 @@ func FetchAuth(authD *token_grpc.AccessDetails) (uint64, error) {
 	return userID, nil
 }
 
-func ExtractTokenMetadata(tokenString string) (*token_grpc.AccessDetails, jwt.Claims, error) {
+func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.MapClaims, error) {
 	token, err := VerifyTokenIntegrity(tokenString)
 	if err != nil {
 		return nil, nil, err
@@ -255,7 +255,7 @@ func ExtractTokenMetadata(tokenString string) (*token_grpc.AccessDetails, jwt.Cl
 			return nil, nil, err
 		}
 
-		return &token_grpc.AccessDetails{
+		return &models.AccessDetails{
 			AccessUuid: accessUuid,
 			UserId:     userID,
 		}, claims, nil
