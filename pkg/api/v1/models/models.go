@@ -1,4 +1,4 @@
-package models
+package service.models
 
 import (
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"

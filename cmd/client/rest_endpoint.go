@@ -10,7 +10,6 @@ import (
 	"strconv"
 
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
-
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/chi"
 	"github.com/go-redis/redis"
