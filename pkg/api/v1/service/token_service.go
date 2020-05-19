@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	models "github.com/David-solly/auth_microservice/pkg/api/v1/models"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-redis/redis"
 	"github.com/twinj/uuid"
@@ -37,43 +38,9 @@ func RedisInit() {
 	fmt.Println("Redis server - Online ..........")
 }
 
-type AccessTokens struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-}
-
-type AccessDetails struct {
-	AccessUuid string
-	UserId     uint64
-}
-
-type ServiceError struct {
-	Error string `json:"error,omitempty"`
-	Code  int    `json:"code,omitempty"`
-}
-
-type TokenDetails struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	AccessUUID   string `json:"access_uuid"`
-	RefreshUUID  string `json:"refresh_uuid"`
-	AtExpiry     int64  `json:"at_expiry"`
-	RtExpiry     int64  `json:"rt_expiry"`
-}
-
-type TokenClaim struct {
-	Claim string      `json:"claim"`
-	Value interface{} `json:"value"`
-}
-
-type TokenVerifyResponse struct {
-	UserID uint64     `json:"id"`
-	Status int        `json:"status"`
-	Claims jwt.Claims `json:"claims,omitempty"`
-}
 type TokenServiceInterface interface {
-	Generate(ctx context.Context, claims map[string]string) (*AccessTokens, error)
-	VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*TokenVerifyResponse, error)
+	Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error)
+	VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, error)
 	// RenewTokens(ctx context.Context, in *TokenRenewRequest, opts ...grpc.CallOption) (*TokenResponse, error)
 	// AffectToken(ctx context.Context, in *TokenAffectRequest, opts ...grpc.CallOption) (*TokenAffectResponse, error)
 }
@@ -81,9 +48,9 @@ type TokenServiceInterface interface {
 type TokenService struct {
 }
 
-func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (*AccessTokens, error) {
+func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error) {
 
-	td := TokenDetails{}
+	td := models.TokenDetails{}
 	td.AtExpiry = time.Now().Add(time.Minute * 15).Unix()
 	td.AccessUUID = uuid.NewV4().String()
 
@@ -124,23 +91,23 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 
 }
 
-func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*TokenVerifyResponse, error) {
+func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, error) {
 
 	return nil, nil
 }
 
-func verifyAndGetTokenClaims(token string) (*TokenVerifyResponse, *ResponseObject, bool) {
+func verifyAndGetTokenClaims(token string) (*models.TokenVerifyResponse, *models.ResponseObject, bool) {
 	tokenAuth, tokenClaims, err := ExtractTokenMetadata(token)
 	if err != nil {
-		return nil, &ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, false
+		return nil, &models.ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, false
 	}
 
 	userID, err := FetchAuth(tokenAuth)
 	if err != nil {
-		return nil, &ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
+		return nil, &models.ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
 	}
 
-	return &token_grpc.TokenVerifyResponse{UserID: userID, Claims: tokenClaims}, nil, true
+	return &models.TokenVerifyResponse{UserID: userID, Claims: tokenClaims}, nil, true
 }
 
 func mergeClaims(claims map[string]string) jwt.MapClaims {
@@ -151,7 +118,7 @@ func mergeClaims(claims map[string]string) jwt.MapClaims {
 	return c
 }
 
-func createAuth(userid string, td *TokenDetails) (*AccessTokens, error) {
+func createAuth(userid string, td *models.TokenDetails) (*models.AccessTokens, error) {
 	at := time.Unix(td.AtExpiry, 0) //converting Unix to UTC(to Time object)
 	rt := time.Unix(td.RtExpiry, 0)
 	now := time.Now()
@@ -167,7 +134,7 @@ func createAuth(userid string, td *TokenDetails) (*AccessTokens, error) {
 
 	// fmt.Printf("Storing tokens : %v", td)
 	// storage ...
-	return &AccessTokens{AccessToken: td.AccessToken, RefreshToken: td.RefreshToken}, nil
+	return &models.AccessTokens{AccessToken: td.AccessToken, RefreshToken: td.RefreshToken}, nil
 
 }
 
@@ -181,7 +148,7 @@ func deleteAuth(uuid string) (int64, error) {
 }
 
 // FetchAuth : ensure the token hasn't expired
-func FetchAuth(authD *AccessDetails) (uint64, error) {
+func FetchAuth(authD *models.AccessDetails) (uint64, error) {
 	userid, err := client.Get(authD.AccessUuid).Result()
 	if err != nil {
 		return 0, err
@@ -190,7 +157,7 @@ func FetchAuth(authD *AccessDetails) (uint64, error) {
 	return userID, nil
 }
 
-func ExtractTokenMetadata(tokenString string) (*AccessDetails, jwt.Claims, error) {
+func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.Claims, error) {
 	token, err := VerifyTokenIntegrity(tokenString)
 	if err != nil {
 		return nil, nil, err
@@ -209,7 +176,7 @@ func ExtractTokenMetadata(tokenString string) (*AccessDetails, jwt.Claims, error
 			return nil, nil, err
 		}
 
-		return &AccessDetails{
+		return &models.AccessDetails{
 			AccessUuid: accessUuid,
 			UserId:     userID,
 		}, claims, nil

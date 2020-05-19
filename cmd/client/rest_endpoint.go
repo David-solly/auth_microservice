@@ -9,6 +9,8 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
+
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/chi"
@@ -22,7 +24,7 @@ var (
 )
 
 var (
-	tUser = User{
+	tUser = models.User{
 		ID:       1,
 		Username: "binyamin.dev@gmail.com",
 		Password: "binyamin.dev@gmail.com",
@@ -37,7 +39,7 @@ func initGrpc() {
 
 	conn1, err := dialConnection(address)
 	if err != nil {
-		// errorHandler(w, ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
+		// errorHandler(w, models.ResponseObject{Error: "Sorry, could not process request at this time", Code: http.StatusInternalServerError})
 		log.Panicln("Failed to connect to Token service instance from api gateway")
 		return
 	}
@@ -67,7 +69,7 @@ func rest(grpcAddr *string) {
 }
 
 func greetingHandler(_ context.Context, r *http.Request) (interface{}, error) {
-	return ResponseObject{Code: http.StatusOK, Message: "Api is up"}, nil
+	return models.ResponseObject{Code: http.StatusOK, Message: "Api is up"}, nil
 
 }
 
@@ -84,7 +86,7 @@ func greetingHandler(_ context.Context, r *http.Request) (interface{}, error) {
 // 					}
 // 				}(w)
 // 				initGrpc()
-// 				confirmService, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is ... restarting", serviceID)})
+// 				confirmService, _ := json.Marshal(models.ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is ... restarting", serviceID)})
 // 				w.Write(confirmService)
 // 			}(w)
 // 		}
@@ -95,7 +97,7 @@ func greetingHandler(_ context.Context, r *http.Request) (interface{}, error) {
 // 			if conn.GetState() == connectivity.Idle || conn.GetState() == connectivity.Connecting || conn.GetState() == connectivity.Ready {
 // 				conn.Close()
 // 				conn = nil
-// 				confirmService, _ := json.Marshal(ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is disconnecting", serviceID)})
+// 				confirmService, _ := json.Marshal(models.ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is disconnecting", serviceID)})
 // 				w.Write(confirmService)
 
 // 			}
@@ -107,7 +109,7 @@ func greetingHandler(_ context.Context, r *http.Request) (interface{}, error) {
 func serviceHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	token, ok := extractAuthToken(r)
 	if !ok {
-		return ResponseObject{Error: token, Code: http.StatusUnauthorized}, nil
+		return models.ResponseObject{Error: token, Code: http.StatusUnauthorized}, nil
 
 	}
 	u, resp, ok := verifyAndGetTokenClaims(token)
@@ -119,24 +121,24 @@ func serviceHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	td.UserID = u.UserID
 
 	serviceID := chi.URLParam(r, "serviceID")
-	return ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is up - authorized for id :%v", serviceID, td.UserID)}, nil
+	return models.models.ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is up - authorized for id :%v", serviceID, td.UserID)}, nil
 }
 
-func verifyAndGetTokenClaims(token string) (*token_grpc.TokenVerifyResponse, *ResponseObject, bool) {
+func verifyAndGetTokenClaims(token string) (*token_grpc.TokenVerifyResponse, *models.ResponseObject, bool) {
 	tokenAuth, tokenClaims, err := ExtractTokenMetadata(token)
 	if err != nil {
-		return nil, &ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, false
+		return nil, &models.ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, false
 	}
 
 	userID, err := FetchAuth(tokenAuth)
 	if err != nil {
-		return nil, &ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
+		return nil, &models.ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
 	}
 
 	return &token_grpc.TokenVerifyResponse{UserID: userID, Claims: tokenClaims}, nil, true
 }
 
-func errorHandler(w http.ResponseWriter, response ResponseObject) {
+func errorHandler(w http.ResponseWriter, response models.ResponseObject) {
 	err, _ := json.Marshal(response)
 	w.Write(err)
 }
@@ -145,12 +147,12 @@ func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	user := User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		return ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest}, nil
+		return models.ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest}, nil
 	}
 
 	if user.Username == tUser.Username && user.Password == tUser.Password {
 		// if conn == nil {
-		// 	return ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError}, nil
+		// 	return models.ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError}, nil
 		// }
 
 		claims := make(map[string]string)
@@ -159,7 +161,7 @@ func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
 
 	}
 
-	return ResponseObject{Error: "Sorry, the login credentials don't match any records", Code: http.StatusNoContent}, nil
+	return models.ResponseObject{Error: "Sorry, the login credentials don't match any records", Code: http.StatusNoContent}, nil
 
 }
 
@@ -167,20 +169,20 @@ func registerHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	user := User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		return ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest}, nil
+		return models.ResponseObject{Error: "Bad request fromat", Code: http.StatusBadRequest}, nil
 
 	}
 
 	if user.PII.Mobile == "" {
-		return ResponseObject{Error: "Sorry, please include a valid mobile number", Code: http.StatusUnprocessableEntity}, nil
+		return models.ResponseObject{Error: "Sorry, please include a valid mobile number", Code: http.StatusUnprocessableEntity}, nil
 
 	}
 
 	if unique, e := verifyUniqueUser(user.Username); e != nil {
-		return ResponseObject{Error: "Sorry, could not process request", Code: http.StatusInternalServerError}, nil
+		return models.ResponseObject{Error: "Sorry, could not process request", Code: http.StatusInternalServerError}, nil
 
 	} else if !unique {
-		return ResponseObject{Error: "Sorry, the username already exist on our system.", Code: http.StatusAlreadyReported}, nil
+		return models.ResponseObject{Error: "Sorry, the username already exist on our system.", Code: http.StatusAlreadyReported}, nil
 
 	}
 

@@ -1,15 +1,12 @@
-package service.models
+package models
 
-import (
-	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
-)
 
 // ResponseObject ...
 // general response object
 type ResponseObject struct {
 	Error   string                   `json:"error,omitempty"`
 	Code    int                      `json:"code,omitempty"`
-	Tokens  *token_grpc.AccessTokens `json:"tokens,omitempty"`
+	Tokens  *AccessTokens `json:"tokens,omitempty"`
 	Token   string                   `json:"token,omitempty"`
 	Message string                   `json:"message,omitempty"`
 }

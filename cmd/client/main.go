@@ -15,6 +15,7 @@ import (
 	"time"
 
 	grpcClient "github.com/David-solly/auth_microservice/cmd/client/client"
+	models "github.com/David-solly/auth_microservice/pkg/api/v1/models"
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -266,7 +267,7 @@ func makeBalancedGenerateEndpoint(svc token_grpc.TokenServiceInterface) endpoint
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
 		req, k := request.(token_grpc.TokenRequest)
 		if !k {
-			if resp, ok := request.(ResponseObject); ok {
+			if resp, ok := request.(models.ResponseObject); ok {
 
 				return resp, nil
 			}
@@ -283,16 +284,16 @@ func makeBalancedGenerateEndpoint(svc token_grpc.TokenServiceInterface) endpoint
 }
 
 func decodeUppercaseRequest(_ context.Context, r *http.Request) (interface{}, error) {
-	user := User{}
+	user := models.User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		j, _ := json.Marshal(ResponseObject{Error: "Bad request format", Code: http.StatusBadRequest})
+		j, _ := json.Marshal(models.ResponseObject{Error: "Bad request format", Code: http.StatusBadRequest})
 		return nil, errors.New(string(j))
 	}
 
 	if user.Username == tUser.Username && user.Password == tUser.Password {
 		if conn == nil {
-			j, _ := json.Marshal(ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError})
+			j, _ := json.Marshal(models.ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError})
 			return errors.New(string(j)), nil
 		}
 
@@ -318,7 +319,7 @@ func decodeUppercaseRequest(_ context.Context, r *http.Request) (interface{}, er
 
 	}
 
-	j, _ := json.Marshal(ResponseObject{Error: "Sorry, the login credentials don't match any records", Code: http.StatusNoContent})
+	j, _ := json.Marshal(models.ResponseObject{Error: "Sorry, the login credentials don't match any records", Code: http.StatusNoContent})
 	return nil, errors.New(string(j))
 
 }
@@ -352,7 +353,7 @@ func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 }
 
 func genError(errorString string, errorCode int) *[]byte {
-	v, _ := json.Marshal(ResponseObject{Error: errorString, Code: errorCode})
+	v, _ := json.Marshal(models.ResponseObject{Error: errorString, Code: errorCode})
 	return &v
 }
 
