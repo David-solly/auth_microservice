@@ -288,7 +288,8 @@ func VerifyTokenIntegrity(tokenString string) (*jwt.Token, error) {
 		return []byte(os.Getenv("JWT_SECRET")), nil
 	})
 	if err != nil {
-		return nil, err
+		log.Print(err)
+		return nil, fmt.Errorf("Invalid token format")
 	}
 	return token, nil
 }

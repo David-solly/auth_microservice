@@ -441,7 +441,7 @@ func encodeVerifyResponse(_ context.Context, w http.ResponseWriter, response int
 func encodeAffectResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
 	w.Header().Add("Content-Type", "application/json")
 	if r, o := response.(*models.TokenAffectResponse); o {
-		if r.Error.Code != 0 {
+		if r.Error != nil {
 			return json.NewEncoder(w).Encode(r.Error)
 		}
 
