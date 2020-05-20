@@ -8,8 +8,9 @@ type AccessTokens struct {
 }
 
 type AccessDetails struct {
-	AccessUuid string
-	UserId     uint64
+	AccessUuid  string `json:"access_uuid,omitempty"`
+	RefreshUUID string `json:"refresh_uuid,omitempty"`
+	UserId      uint64 `json:"user_id"`
 }
 
 type ServiceError struct {
