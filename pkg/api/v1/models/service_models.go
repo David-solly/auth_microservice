@@ -32,10 +32,14 @@ type TokenClaim struct {
 }
 
 type TokenVerifyResponse struct {
+	Access ServiceAccess `json:"access,omitempty"`
+	Error  ServiceError  `json:"error,omitempty"`
+}
+
+type ServiceAccess struct {
 	UserID uint64         `json:"id,omitempty"`
 	Status TokenStatus    `json:"status,omitempty"`
 	Claims *jwt.MapClaims `json:"claims,omitempty"`
-	Error  ServiceError   `json:"error,omitempty"`
 }
 
 type TokenStatus int32

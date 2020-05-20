@@ -96,8 +96,6 @@ func main() {
 		handler := token_grpc.NewGRPCServer(ctx, endpoints)
 		gRPCServer := grpc.NewServer()
 		pb.RegisterTokenServiceServer(gRPCServer, handler)
-		println("started on")
-		//fmt.Printf("%v", gRPCServer.GetServiceInfo())
 		registar.Register()
 		errChan <- gRPCServer.Serve(listener)
 	}()
@@ -112,7 +110,7 @@ func main() {
 		handler := token_grpc.NewGRPCServerHealth(ctx, endpointsHealth)
 		gRPCServer := grpc.NewServer()
 		hc.RegisterHealthServer(gRPCServer, handler)
-		//fmt.Printf("Service info %v", gRPCServer.GetServiceInfo())
+		fmt.Printf("Service info %v", gRPCServer.GetServiceInfo())
 		errChan <- gRPCServer.Serve(listener)
 	}()
 

@@ -108,25 +108,22 @@ func generateToken(ctx context.Context, service token_grpc.TokenServiceInterface
 		ilog.Fatalln(err.Error())
 		return nil, err
 	}
-	// fmt.Println(mesg)
 	return mesg, nil
 }
 
 // call generateToken service
 func verifyToken(ctx context.Context, service token_grpc.TokenServiceInterface, tokenToverify token_grpc.TokenVerifyRequest) (*models.TokenVerifyResponse, interface{}) {
 	mesg, err := service.VerifyToken(ctx, tokenToverify)
-	//fmt.Printf("@@@-- Received after svc.VerifyToken %v\nErr:%v", mesg, err)
 	if err != nil {
 		if ob, k := err.(models.ResponseObject); k {
 			return nil, ob
 		}
 		if errSt, k := err.(*string); k {
-			return nil, &models.TokenVerifyResponse{Error: models.ServiceError{Error: *errSt, Code: 401}}
+			return nil, &models.ResponseObject{Error: *errSt, Code: 401}
 		}
 
 		return nil, errors.New(fmt.Sprintf("Unknown error in verify with object %v", err))
 	}
-	// fmt.Println(mesg)
 	return mesg, nil
 }
 
@@ -269,20 +266,13 @@ func main() {
 		encodeResponse,
 	)
 
-	servicehandle := ht.NewServer(
-		generateEndpoint,
-		serviceHandler,
-		encodeResponse,
-	)
-
 	verifyhandle := ht.NewServer(
 		verifyEndpoint,
 		verifyHandler,
-		encodeResponse,
+		encodeVerifyResponse,
 	)
 
 	r := chi.NewRouter()
-
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
@@ -296,7 +286,6 @@ func main() {
 	r.Handle("/login", suhandle)
 	r.Handle("/register", registerhandle)
 	r.Handle("/verify/{serviceID}", verifyhandle)
-	r.Handle("/service/{serviceID}", servicehandle)
 
 	// Interrupt handler.
 	errc := make(chan error)
@@ -365,11 +354,17 @@ func makeBalancedVerifyEndpoint(svc token_grpc.TokenServiceInterface) endpoint.E
 }
 
 func encodeResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
-	// if r, o := response.(ResponseObject); o {
-	// 	if r.Error != "" {
-	// 		return json.NewEncoder(w).Encode(r)
-	// 	}
-	// }
+	return json.NewEncoder(w).Encode(response)
+}
+
+func encodeVerifyResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
+	if r, o := response.(*models.TokenVerifyResponse); o {
+		if r.Error.Code != 0 {
+			return json.NewEncoder(w).Encode(r.Error)
+		} else {
+			return json.NewEncoder(w).Encode(r.Access)
+		}
+	}
 	return json.NewEncoder(w).Encode(response)
 }
 

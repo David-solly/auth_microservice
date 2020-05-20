@@ -86,39 +86,43 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 	if err != nil {
 		return nil, err
 	}
-	// //fmt.Printf("token details \nAT:{%v}\nRT:{%v}\n", token, rtoken)
 
 	return tokens, nil
 
 }
 
 func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{}) {
-	// //fmt.Printf("IN verify token of TokenService %v", tokenToverify)
-	u, resp, ok := verifyAndGetTokenClaims(tokenToverify.Token)
-	if !ok {
-		return nil, resp
+	resp, err := verifyAndGetTokenClaims(tokenToverify.Token, tokenToverify.Service)
+	if err != nil {
+		return nil, &models.ResponseObject{Error: err.Error(), Code: http.StatusUnauthorized}
 	}
 
-	//fmt.Printf("Verify token resposne %v\nresp:%v", *u, resp)
-
-	return u, nil
+	return resp, nil
 }
 
-func verifyAndGetTokenClaims(token string) (*models.TokenVerifyResponse, *models.ResponseObject, bool) {
+func verifyAndGetTokenClaims(token, service string) (*models.TokenVerifyResponse, error) {
 	tokenAuth, tokenClaims, err := ExtractTokenMetadata(token)
 	if err != nil {
-		return nil, &models.ResponseObject{Error: "Unauthorized token", Code: http.StatusUnauthorized}, false
+		return &models.TokenVerifyResponse{Error: models.ServiceError{Error: err.Error(), Code: http.StatusUnauthorized}}, nil
 	}
 
 	userID, err := FetchAuth(tokenAuth)
 	if err != nil {
-		return nil, &models.ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
+		return &models.TokenVerifyResponse{Error: models.ServiceError{Error: err.Error(), Code: http.StatusUnauthorized}}, nil
+	}
+	s := models.TokenStatus_AUTHORIZED
+	if service != "" {
+		svc, k := tokenClaims["service"]
+		if !k {
+			s = models.TokenStatus_RESTRICTED
+		} else if svc != service {
+			s = models.TokenStatus_RESTRICTED
+		}
+
 	}
 
-	//fmt.Printf("Authorized : \nUid:%v\nClaims:%v\nStatus:%v\nauthToken : %v", userID, tokenClaims, models.TokenStatus_AUTHORIZED, tokenAuth)
-	rto := models.TokenVerifyResponse{UserID: userID, Claims: &tokenClaims, Status: models.TokenStatus_AUTHORIZED}
-	// //fmt.Printf("Objct to return %v\nPointed:%v", rto)
-	return &rto, nil, true
+	rto := models.TokenVerifyResponse{Access: models.ServiceAccess{UserID: userID, Claims: &tokenClaims, Status: s}}
+	return &rto, nil
 }
 
 func MergeClaims(claims map[string]string) jwt.MapClaims {
@@ -149,7 +153,6 @@ func createAuth(userid string, td *models.TokenDetails, claims map[string]string
 		return nil, errRefresh
 	}
 
-	// //fmt.Printf("Storing tokens : %v", td)
 	// storage ...
 	return &models.AccessTokens{AccessToken: td.AccessToken, RefreshToken: td.RefreshToken}, nil
 

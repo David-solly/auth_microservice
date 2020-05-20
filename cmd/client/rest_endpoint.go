@@ -26,30 +26,16 @@ var (
 )
 
 func greetingHandler(_ context.Context, r *http.Request) (interface{}, error) {
-	return models.ResponseObject{Code: http.StatusOK, Message: "Api is up"}, nil
-
-}
-
-func serviceHandler(_ context.Context, r *http.Request) (interface{}, error) {
-	token, ok := extractAuthToken(r)
-	if !ok {
-		return models.ResponseObject{Error: token, Code: http.StatusUnauthorized}, nil
-
+	if r.Method != http.MethodGet {
+		return nil, http.ErrBodyNotAllowed
 	}
-	// u, resp, ok := token_grpc.VerifyAndGetTokenClaims(token)
-	// if !ok {
-	// 	return resp, nil
-	// }
-
-	td := models.ServiceRequest{}
-	// td.UserID = u.UserID
-
-	serviceID := chi.URLParam(r, "serviceID")
-	return models.ResponseObject{Code: http.StatusOK, Message: fmt.Sprintf("Service %v is up - authorized for id :%v", serviceID, td.UserID)}, nil
+	return models.ResponseObject{Code: http.StatusOK, Message: "Api is up"}, nil
 }
 
 func verifyHandler(_ context.Context, r *http.Request) (interface{}, error) {
-
+	if r.Method != http.MethodPost {
+		return nil, http.ErrBodyNotAllowed
+	}
 	token, ok := extractAuthToken(r)
 	if !ok {
 		return models.ResponseObject{Error: token, Code: http.StatusUnauthorized}, nil
@@ -66,6 +52,9 @@ func errorHandler(w http.ResponseWriter, response models.ResponseObject) {
 }
 
 func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
+	if r.Method != http.MethodPost {
+		return nil, http.ErrBodyNotAllowed
+	}
 	user := models.User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -73,9 +62,6 @@ func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	}
 
 	if user.Username == tUser.Username && user.Password == tUser.Password {
-		// if conn == nil {
-		// 	return models.ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError}, nil
-		// }
 
 		claims := make(map[string]string)
 		claims["id"] = fmt.Sprintf("%v", tUser.ID)
@@ -88,6 +74,9 @@ func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
 }
 
 func registerHandler(_ context.Context, r *http.Request) (interface{}, error) {
+	if r.Method != http.MethodPost {
+		return nil, http.ErrBodyNotAllowed
+	}
 	user := models.User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {

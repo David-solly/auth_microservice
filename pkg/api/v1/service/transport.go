@@ -28,10 +28,12 @@ func (s *grpcServer) Generate(ctx context.Context, r *pb.TokenRequest) (*pb.Toke
 }
 
 func (s *grpcServer) VerifyToken(ctx context.Context, r *pb.TokenVerifyRequest) (*pb.TokenVerifyResponse, error) {
+
 	_, resp, err := s.verify.ServeGRPC(ctx, r)
 	if err != nil {
 		return nil, err
 	}
+
 	return resp.(*pb.TokenVerifyResponse), nil
 }
 
