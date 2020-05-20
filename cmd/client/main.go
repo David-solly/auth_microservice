@@ -267,14 +267,14 @@ func main() {
 		factory := affectTokenFactory(ctx, "POST", "/affect")
 		endpointer := sd.NewEndpointer(instancer, factory, logger)
 		balancer := lb.NewRoundRobin(endpointer)
-		retry := lb.Retry(1, duration, balancer)
+		retry := lb.Retry(3, duration, balancer)
 		affectEndpoint = retry
 	}
 	{
 		factory := generateTokenFactory(ctx, "POST", "/login")
 		endpointer := sd.NewEndpointer(instancer, factory, logger)
 		balancer := lb.NewRoundRobin(endpointer)
-		retry := lb.Retry(1, duration, balancer)
+		retry := lb.Retry(3, duration, balancer)
 		generateEndpoint = retry
 	}
 	{

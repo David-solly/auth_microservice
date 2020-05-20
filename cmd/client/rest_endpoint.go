@@ -47,7 +47,7 @@ func verifyHandler(_ context.Context, r *http.Request) (interface{}, error) {
 }
 
 func logoutHandler(_ context.Context, r *http.Request) (interface{}, error) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		return nil, http.ErrBodyNotAllowed
 	}
 	token, ok := extractAuthToken(r)
@@ -66,7 +66,7 @@ func errorHandler(w http.ResponseWriter, response models.ResponseObject) {
 
 func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	if r.Method != http.MethodPost {
-		return nil, http.ErrBodyNotAllowed
+		return nil, http.ErrNotSupported
 	}
 	user := models.User{}
 
@@ -88,7 +88,7 @@ func loginHandler(_ context.Context, r *http.Request) (interface{}, error) {
 
 func registerHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	if r.Method != http.MethodPost {
-		return nil, http.ErrBodyNotAllowed
+		return nil, http.ErrNotSupported
 	}
 	user := models.User{}
 
