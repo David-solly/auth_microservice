@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -40,7 +41,7 @@ func RedisInit() {
 
 type TokenServiceInterface interface {
 	Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error)
-	VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, error)
+	VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{})
 	// RenewTokens(ctx context.Context, in *TokenRenewRequest, opts ...grpc.CallOption) (*TokenResponse, error)
 	// AffectToken(ctx context.Context, in *TokenAffectRequest, opts ...grpc.CallOption) (*TokenAffectResponse, error)
 }
@@ -58,7 +59,7 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 	td.RefreshUUID = uuid.NewV4().String()
 
 	// create access token
-	atClaims := mergeClaims(claims)
+	atClaims := MergeClaims(claims)
 	atClaims["access_uuid"] = td.AccessUUID
 	atClaims["exp"] = td.AtExpiry
 	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
@@ -68,8 +69,8 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 	}
 
 	//create refresh token
-	rtClaims := mergeClaims(claims)
-
+	rtClaims := jwt.MapClaims{}
+	rtClaims["id"] = atClaims["id"]
 	rtClaims["refresh_uuid"] = td.RefreshUUID
 	rtClaims["exp"] = td.RtExpiry
 	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
@@ -81,19 +82,26 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 	td.AccessToken = token
 	td.RefreshToken = rtoken
 
-	tokens, err := createAuth(rtClaims["id"].(string), &td)
+	tokens, err := createAuth(atClaims["id"].(string), &td, claims)
 	if err != nil {
 		return nil, err
 	}
-	// fmt.Printf("token details \nAT:{%v}\nRT:{%v}\n", token, rtoken)
+	// //fmt.Printf("token details \nAT:{%v}\nRT:{%v}\n", token, rtoken)
 
 	return tokens, nil
 
 }
 
-func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, error) {
+func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{}) {
+	// //fmt.Printf("IN verify token of TokenService %v", tokenToverify)
+	u, resp, ok := verifyAndGetTokenClaims(tokenToverify.Token)
+	if !ok {
+		return nil, resp
+	}
 
-	return nil, nil
+	//fmt.Printf("Verify token resposne %v\nresp:%v", *u, resp)
+
+	return u, nil
 }
 
 func verifyAndGetTokenClaims(token string) (*models.TokenVerifyResponse, *models.ResponseObject, bool) {
@@ -107,10 +115,13 @@ func verifyAndGetTokenClaims(token string) (*models.TokenVerifyResponse, *models
 		return nil, &models.ResponseObject{Error: "Unauthorized for resource", Code: http.StatusUnauthorized}, false
 	}
 
-	return &models.TokenVerifyResponse{UserID: userID, Claims: &tokenClaims}, nil, true
+	//fmt.Printf("Authorized : \nUid:%v\nClaims:%v\nStatus:%v\nauthToken : %v", userID, tokenClaims, models.TokenStatus_AUTHORIZED, tokenAuth)
+	rto := models.TokenVerifyResponse{UserID: userID, Claims: &tokenClaims, Status: models.TokenStatus_AUTHORIZED}
+	// //fmt.Printf("Objct to return %v\nPointed:%v", rto)
+	return &rto, nil, true
 }
 
-func mergeClaims(claims map[string]string) jwt.MapClaims {
+func MergeClaims(claims map[string]string) jwt.MapClaims {
 	c := jwt.MapClaims{}
 	for claim, value := range claims {
 		c[claim] = value
@@ -118,7 +129,7 @@ func mergeClaims(claims map[string]string) jwt.MapClaims {
 	return c
 }
 
-func createAuth(userid string, td *models.TokenDetails) (*models.AccessTokens, error) {
+func createAuth(userid string, td *models.TokenDetails, claims map[string]string) (*models.AccessTokens, error) {
 	at := time.Unix(td.AtExpiry, 0) //converting Unix to UTC(to Time object)
 	rt := time.Unix(td.RtExpiry, 0)
 	now := time.Now()
@@ -127,12 +138,18 @@ func createAuth(userid string, td *models.TokenDetails) (*models.AccessTokens, e
 	if errAccess != nil {
 		return nil, errAccess
 	}
-	errRefresh := client.Set(td.RefreshUUID, userid, rt.Sub(now)).Err()
+
+	// serialize User object to JSON
+	json, err := json.Marshal(claims)
+	if err != nil {
+		return nil, err
+	}
+	errRefresh := client.Set(td.RefreshUUID, json, rt.Sub(now)).Err()
 	if errRefresh != nil {
 		return nil, errRefresh
 	}
 
-	// fmt.Printf("Storing tokens : %v", td)
+	// //fmt.Printf("Storing tokens : %v", td)
 	// storage ...
 	return &models.AccessTokens{AccessToken: td.AccessToken, RefreshToken: td.RefreshToken}, nil
 

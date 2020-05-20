@@ -8,7 +8,6 @@ import (
 	"io"
 	ilog "log"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -67,7 +66,7 @@ func runCmd(add *string) error {
 	cmd, args = pop(args)
 
 	if len(args) < 2 {
-		print("no cmd args")
+		//fmt.Print"no cmd args")
 	}
 
 	switch cmd {
@@ -77,7 +76,7 @@ func runCmd(add *string) error {
 
 		for r := 0; r <= len(args); r++ {
 			var claim, value string
-			print(r)
+			//fmt.Printr)
 			claim, args = pop(args)
 			value, args = pop(args)
 			claims[claim] = value
@@ -103,7 +102,7 @@ func pop(s []string) (string, []string) {
 }
 
 // call generateToken service
-func generateToken(ctx context.Context, service token_grpc.TokenServiceInterface, claims map[string]string) (*token_grpc.AccessTokens, error) {
+func generateToken(ctx context.Context, service token_grpc.TokenServiceInterface, claims map[string]string) (*models.AccessTokens, error) {
 	mesg, err := service.Generate(ctx, claims)
 	if err != nil {
 		ilog.Fatalln(err.Error())
@@ -113,10 +112,29 @@ func generateToken(ctx context.Context, service token_grpc.TokenServiceInterface
 	return mesg, nil
 }
 
+// call generateToken service
+func verifyToken(ctx context.Context, service token_grpc.TokenServiceInterface, tokenToverify token_grpc.TokenVerifyRequest) (*models.TokenVerifyResponse, interface{}) {
+	mesg, err := service.VerifyToken(ctx, tokenToverify)
+	//fmt.Printf("@@@-- Received after svc.VerifyToken %v\nErr:%v", mesg, err)
+	if err != nil {
+		if ob, k := err.(models.ResponseObject); k {
+			return nil, ob
+		}
+		if errSt, k := err.(*string); k {
+			return nil, &models.TokenVerifyResponse{Error: models.ServiceError{Error: *errSt, Code: 401}}
+		}
+
+		return nil, errors.New(fmt.Sprintf("Unknown error in verify with object %v", err))
+	}
+	// fmt.Println(mesg)
+	return mesg, nil
+}
+
 //parse consule message to endpoint
 func generateTokenFactory(_ context.Context, method, path string) sd.Factory {
 	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
 
+		// ####### ----START----for http #############
 		// if !strings.HasPrefix(instance, "http") {
 		// 	instance = "http://" + instance
 		// }
@@ -126,23 +144,46 @@ func generateTokenFactory(_ context.Context, method, path string) sd.Factory {
 		fmt.Println(method)
 		fmt.Println(path)
 
-		tgt, err := url.Parse(instance)
-		if err != nil {
-			return nil, nil, err
-		}
-		tgt.Path = path
-		conn1, err := dialConnection(&instance)
-		svc := makeConnection(conn1)
-		conn = conn1
+		// tgt, err := url.Parse(instance)
+		// if err != nil {
+		// 	return nil, nil, err
+		// }
+		// tgt.Path = path
+
 		// var (
 		// 	enc ht.EncodeRequestFunc
 		// 	dec ht.DecodeResponseFunc
 		// )
 		// enc, dec = encodeLoremRequest, decodeLoremResponse
-
 		//return ht.NewClient(method, tgt, enc, dec).Endpoint(), nil, nil
+		//######### ----END---- for http endpoint
 
+		conn1, err := dialConnection(&instance)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		svc := makeConnection(conn1)
 		return makeBalancedGenerateEndpoint(svc), conn1, nil
+	}
+}
+
+//parse consule message to endpoint
+func verifyTokenFactory(_ context.Context, method, path string) sd.Factory {
+	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
+
+		fmt.Println("@@@@@@@@ received from consul")
+		fmt.Println(instance)
+		fmt.Println(method)
+		fmt.Println(path)
+
+		conn1, err := dialConnection(&instance)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		svc := makeConnection(conn1)
+		return makeBalancedVerifyEndpoint(svc), conn1, nil
 	}
 }
 
@@ -172,14 +213,10 @@ func main() {
 		logger = log.With(logger, "caller", log.DefaultCaller)
 	}
 
-	//init redis dev
-	RedisInit()
-
 	// Service discovery domain. In this example we use Consul.
 	var client consulsd.Client
 	{
 		consulConfig := api.DefaultConfig()
-
 		consulConfig.Address = "http://" + *consulAddr + ":" + *consulPort
 		consulClient, err := api.NewClient(consulConfig)
 		if err != nil {
@@ -189,22 +226,31 @@ func main() {
 		client = consulsd.NewClient(consulClient)
 	}
 
+	ctx := context.Background()
+
 	tags := []string{"jwt generate", "yea-buddy!!!"}
 	passingOnly := true
 	duration := 500 * time.Millisecond
 	var generateEndpoint endpoint.Endpoint
+	var verifyEndpoint endpoint.Endpoint
 
-	ctx := context.Background()
-	r := chi.NewRouter()
-
-	factory := generateTokenFactory(ctx, "POST", "/login")
 	serviceName := "JWT-Service"
 	instancer := consulsd.NewInstancer(client, logger, serviceName, tags, passingOnly)
-	endpointer := sd.NewEndpointer(instancer, factory, logger)
-	balancer := lb.NewRoundRobin(endpointer)
-	retry := lb.Retry(1, duration, balancer)
-	generateEndpoint = retry
 
+	{
+		factory := generateTokenFactory(ctx, "POST", "/login")
+		endpointer := sd.NewEndpointer(instancer, factory, logger)
+		balancer := lb.NewRoundRobin(endpointer)
+		retry := lb.Retry(1, duration, balancer)
+		generateEndpoint = retry
+	}
+	{
+		factory := verifyTokenFactory(ctx, "POST", "/verify")
+		endpointer := sd.NewEndpointer(instancer, factory, logger)
+		balancer := lb.NewRoundRobin(endpointer)
+		retry := lb.Retry(1, duration, balancer)
+		verifyEndpoint = retry
+	}
 	suhandle := ht.NewServer(
 		generateEndpoint,
 		loginHandler,
@@ -229,6 +275,14 @@ func main() {
 		encodeResponse,
 	)
 
+	verifyhandle := ht.NewServer(
+		verifyEndpoint,
+		verifyHandler,
+		encodeResponse,
+	)
+
+	r := chi.NewRouter()
+
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
@@ -241,6 +295,7 @@ func main() {
 	r.Handle("/", greethandle)
 	r.Handle("/login", suhandle)
 	r.Handle("/register", registerhandle)
+	r.Handle("/verify/{serviceID}", verifyhandle)
 	r.Handle("/service/{serviceID}", servicehandle)
 
 	// Interrupt handler.
@@ -283,45 +338,30 @@ func makeBalancedGenerateEndpoint(svc token_grpc.TokenServiceInterface) endpoint
 	}
 }
 
-func decodeUppercaseRequest(_ context.Context, r *http.Request) (interface{}, error) {
-	user := models.User{}
+// Endpoints are a primary abstraction in go-kit. An endpoint represents a single RPC (method in our service interface)
+func makeBalancedVerifyEndpoint(svc token_grpc.TokenServiceInterface) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req, k := request.(token_grpc.TokenVerifyRequest)
 
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		j, _ := json.Marshal(models.ResponseObject{Error: "Bad request format", Code: http.StatusBadRequest})
-		return nil, errors.New(string(j))
-	}
-
-	if user.Username == tUser.Username && user.Password == tUser.Password {
-		if conn == nil {
-			j, _ := json.Marshal(models.ResponseObject{Error: "Sorry, could not process request at this time. Please try again later", Code: http.StatusInternalServerError})
-			return errors.New(string(j)), nil
+		if !k {
+			if resp, ok := request.(models.ResponseObject); ok {
+				return resp, nil
+			}
 		}
 
-		request := token_grpc.TokenRequest{Claims: make(map[string]string)}
-		request.Claims["email"] = user.Username
-		request.Claims["id"] = fmt.Sprintf("%v", tUser.ID)
+		if req.Token == "" {
+			return nil, errors.New("No Token to verify- please supply a valid token!")
+		}
+		v, err := verifyToken(ctx, svc, req)
+		if resp, ok := err.(models.ResponseObject); ok {
+			return resp, nil
+		}
 
-		return request, nil
-
-		//reference code
-
-		// var req token_grpc.TokenRequest2
-		// request := token_grpc.TokenRequest{Claims: make(map[string]string)}
-		// if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		// 	return nil, err
-		// }
-
-		// for x := 0; x < len(req.Claims); x += 2 {
-		// 	request.Claims[req.Claims[x]] = req.Claims[x+1]
-		// }
-
-		// return request, nil
-
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("Error in make balanced verify : %v", err))
+		}
+		return v, nil
 	}
-
-	j, _ := json.Marshal(models.ResponseObject{Error: "Sorry, the login credentials don't match any records", Code: http.StatusNoContent})
-	return nil, errors.New(string(j))
-
 }
 
 func encodeResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {

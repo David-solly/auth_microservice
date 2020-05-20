@@ -10,6 +10,7 @@ import (
 
 type grpcServer struct {
 	generate grpctransport.Handler
+	verify   grpctransport.Handler
 }
 
 type grpcServerHealth struct {
@@ -26,14 +27,26 @@ func (s *grpcServer) Generate(ctx context.Context, r *pb.TokenRequest) (*pb.Toke
 	return resp.(*pb.TokenResponse), nil
 }
 
+func (s *grpcServer) VerifyToken(ctx context.Context, r *pb.TokenVerifyRequest) (*pb.TokenVerifyResponse, error) {
+	_, resp, err := s.verify.ServeGRPC(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.TokenVerifyResponse), nil
+}
+
 // create new grpc server
 func NewGRPCServer(ctx context.Context, endpoint TokenServiceEndpoints) pb.TokenServiceServer {
 	return &grpcServer{
 		generate: grpctransport.NewServer(
-
-			endpoint.Endpoint,
+			endpoint.GenerateEndpoint,
 			DecodeGRPCTokenRequest,
 			EncodeGRPCTokenResponse,
+		),
+		verify: grpctransport.NewServer(
+			endpoint.VerifyEndpoint,
+			DecodeGRPCTokenVerifyRequest,
+			EncodeGRPCTokenVerifyResponse,
 		),
 	}
 }

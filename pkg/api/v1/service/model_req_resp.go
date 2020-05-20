@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"strconv"
 
 	pb "github.com/David-solly/auth_microservice/pkg/api/v1"
 	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
@@ -39,6 +42,77 @@ func DecodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, err
 			RefreshToken: resp.Tokens.RefreshToken,
 		},
 	}, nil
+}
+
+/// Verify Request response - encode/decode
+
+func EncodeGRPCTokenVerifyRequest(_ context.Context, r interface{}) (interface{}, error) {
+	n := r.(TokenVerifyRequest)
+
+	return &pb.TokenVerifyRequest{Token: n.Token, Service: n.Service}, nil
+}
+
+func DecodeGRPCTokenVerifyRequest(ctx context.Context, r interface{}) (interface{}, error) {
+	req := r.(*pb.TokenVerifyRequest)
+	return TokenVerifyRequest{Token: req.Token, Service: req.Service}, nil
+}
+
+// Encode and Decode Token Response
+func EncodeGRPCTokenVerifyResponse(_ context.Context, r interface{}) (interface{}, error) {
+	//fmt.Printf("encoding grpc \nresp:%v\ntype:%T", r, r)
+
+	if resp, k := r.(*models.TokenVerifyResponse); k {
+		return &pb.TokenVerifyResponse{
+			Status: pb.TokenStatus(resp.Status), UserId: fmt.Sprintf("%d", resp.UserID), Claims: resp.MapClaims()}, nil
+	}
+
+	if resp, k := r.(*models.ResponseObject); k {
+		//fmt.Printf("encoding respOb \nresp:%v\ntype:%T", resp, resp)
+		return &pb.TokenVerifyResponse{
+			Error: &pb.ServiceError{
+				Error: resp.Error, Code: int32(resp.Code)},
+			Status: pb.TokenStatus(0)}, nil
+	}
+
+	//fmt.Printf("skipping \nresp:%v\ntype:%T", r, r)
+
+	return &pb.TokenVerifyResponse{
+		Error: &pb.ServiceError{
+			Error: "Unknown error", Code: int32(http.StatusInternalServerError)},
+		Status: pb.TokenStatus(0)}, nil
+}
+
+func DecodeGRPCTokenVerifyResponse(_ context.Context, r interface{}) (interface{}, error) {
+	//fmt.Printf("Decoding response after grpc :%T ~~~~~~########", r)
+
+	if resp, k := r.(*pb.TokenVerifyResponse); k {
+		//fmt.Printf("Decoding response :%vresp ~~######", r)
+		id, _ := strconv.ParseUint(resp.UserId, 10, 64)
+
+		//fmt.Printf("\nDecoding response errors:%v ~~######\n", resp.Error)
+		if resp.Error != nil {
+			return &models.ResponseObject{Error: resp.Error.Error, Code: int(resp.Error.Code)}, nil
+		}
+
+		//fmt.Printf("\nBypassed to Decoding response errors string:%v ~~######\n", resp)
+		c := MergeClaims(resp.Claims)
+
+		return &models.TokenVerifyResponse{
+			UserID: id,
+			Status: models.TokenStatus(resp.Status),
+			Claims: &c,
+		}, nil
+
+	}
+
+	if resp, k := r.(*models.ResponseObject); k {
+		return resp, nil
+	}
+
+	return &models.TokenVerifyResponse{
+		Error: models.ServiceError{
+			Error: "Unknown error 123res", Code: http.StatusInternalServerError},
+		Status: models.TokenStatus(0)}, nil
 }
 
 ///Consul Health service checks

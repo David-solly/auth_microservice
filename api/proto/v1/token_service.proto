@@ -45,6 +45,7 @@ message TokenVerifyResponse{
     TokenStatus status = 1;
     string  user_id =2;
     map<string,string> claims =3;
+    ServiceError error=4;
 }
 
 message TokenRenewRequest{

@@ -32,7 +32,17 @@ type TokenClaim struct {
 }
 
 type TokenVerifyResponse struct {
-	UserID uint64         `json:"id"`
-	Status int            `json:"status"`
+	UserID uint64         `json:"id,omitempty"`
+	Status TokenStatus    `json:"status,omitempty"`
 	Claims *jwt.MapClaims `json:"claims,omitempty"`
+	Error  ServiceError   `json:"error,omitempty"`
 }
+
+type TokenStatus int32
+
+const (
+	TokenStatus_INVALID    TokenStatus = 0
+	TokenStatus_AUTHORIZED TokenStatus = 1
+	TokenStatus_RESTRICTED TokenStatus = 2
+	TokenStatus_EXPIRED    TokenStatus = 3
+)

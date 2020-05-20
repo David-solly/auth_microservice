@@ -19,9 +19,20 @@ type User struct {
 }
 
 // Maps the claims from the request to be encoded in the jwt
-func (c *User) mapClaims() map[string]string {
+func (c *User) MapClaims() map[string]string {
 	claims := make(map[string]string)
 	for x, e := range c.Claims {
+		if sc, k := e.(string); k {
+			claims[x] = sc
+		}
+	}
+	return claims
+}
+
+// Maps the claims from the request to be encoded in the jwt
+func (c *TokenVerifyResponse) MapClaims() map[string]string {
+	claims := make(map[string]string)
+	for x, e := range *c.Claims {
 		if sc, k := e.(string); k {
 			claims[x] = sc
 		}

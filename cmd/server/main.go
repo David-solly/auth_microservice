@@ -28,7 +28,7 @@ func main() {
 
 	token_grpc.RedisInit()
 
-	print("Starting grpc server...")
+	//fmt.Print"Starting grpc server...")
 
 	// parse variable from input command
 	var (
@@ -68,7 +68,8 @@ func main() {
 
 	// creating Endpoints struct
 	endpoints := token_grpc.TokenServiceEndpoints{
-		Endpoint: token_grpc.MakeTokenServiceEndpoint(svc),
+		GenerateEndpoint: token_grpc.MakeTokenServiceGenerateEndpoint(svc),
+		VerifyEndpoint:   token_grpc.MakeTokenServiceVerifyEndpoint(svc),
 	}
 
 	var svcH token_grpc.Health
@@ -96,7 +97,7 @@ func main() {
 		gRPCServer := grpc.NewServer()
 		pb.RegisterTokenServiceServer(gRPCServer, handler)
 		println("started on")
-		fmt.Printf("%v", gRPCServer.GetServiceInfo())
+		//fmt.Printf("%v", gRPCServer.GetServiceInfo())
 		registar.Register()
 		errChan <- gRPCServer.Serve(listener)
 	}()
@@ -111,7 +112,7 @@ func main() {
 		handler := token_grpc.NewGRPCServerHealth(ctx, endpointsHealth)
 		gRPCServer := grpc.NewServer()
 		hc.RegisterHealthServer(gRPCServer, handler)
-		fmt.Printf("Service info %v", gRPCServer.GetServiceInfo())
+		//fmt.Printf("Service info %v", gRPCServer.GetServiceInfo())
 		errChan <- gRPCServer.Serve(listener)
 	}()
 
