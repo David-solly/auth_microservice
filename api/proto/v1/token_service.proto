@@ -6,7 +6,7 @@ service TokenService{
     rpc Generate(TokenRequest)returns (TokenResponse);
     rpc VerifyToken(TokenVerifyRequest) returns (TokenVerifyResponse);
     // rpc RenewTokens(TokenRenewRequest) returns (TokenResponse);
-    // rpc AffectToken(TokenAffectRequest)returns (TokenAffectResponse);
+    rpc AffectToken(TokenAffectRequest)returns (TokenAffectResponse);
 }
 
 message TokenAffectRequest{
@@ -15,7 +15,6 @@ message TokenAffectRequest{
 }
 
 message TokenAffectResponse{
-    
     bool effect_applied=1;
     ServiceError error=2;
     

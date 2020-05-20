@@ -70,6 +70,7 @@ func main() {
 	endpoints := token_grpc.TokenServiceEndpoints{
 		GenerateEndpoint: token_grpc.MakeTokenServiceGenerateEndpoint(svc),
 		VerifyEndpoint:   token_grpc.MakeTokenServiceVerifyEndpoint(svc),
+		AffectEndpoint:   token_grpc.MakeTokenServicAffectEndpoint(svc),
 	}
 
 	var svcH token_grpc.Health
@@ -97,6 +98,7 @@ func main() {
 		gRPCServer := grpc.NewServer()
 		pb.RegisterTokenServiceServer(gRPCServer, handler)
 		registar.Register()
+		fmt.Printf("Service info %v", gRPCServer.GetServiceInfo())
 		errChan <- gRPCServer.Serve(listener)
 	}()
 

@@ -46,6 +46,19 @@ func verifyHandler(_ context.Context, r *http.Request) (interface{}, error) {
 
 }
 
+func logoutHandler(_ context.Context, r *http.Request) (interface{}, error) {
+	if r.Method != http.MethodPost {
+		return nil, http.ErrBodyNotAllowed
+	}
+	token, ok := extractAuthToken(r)
+	if !ok {
+		return models.ResponseObject{Error: token, Code: http.StatusUnauthorized}, nil
+
+	}
+	return models.TokenAffectRequest{Token: token, DesiredState: models.TokenState_LOGOUT}, nil
+
+}
+
 func errorHandler(w http.ResponseWriter, response models.ResponseObject) {
 	err, _ := json.Marshal(response)
 	w.Write(err)

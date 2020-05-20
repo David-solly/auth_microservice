@@ -112,6 +112,16 @@ func generateToken(ctx context.Context, service token_grpc.TokenServiceInterface
 }
 
 // call generateToken service
+func affectToken(ctx context.Context, service token_grpc.TokenServiceInterface, req models.TokenAffectRequest) (*models.TokenAffectResponse, error) {
+	mesg, err := service.AffectToken(ctx, req)
+	if err != nil {
+		ilog.Fatalln(err.Error())
+		return nil, err
+	}
+	return mesg, nil
+}
+
+// call generateToken service
 func verifyToken(ctx context.Context, service token_grpc.TokenServiceInterface, tokenToverify token_grpc.TokenVerifyRequest) (*models.TokenVerifyResponse, interface{}) {
 	mesg, err := service.VerifyToken(ctx, tokenToverify)
 	if err != nil {
@@ -122,7 +132,7 @@ func verifyToken(ctx context.Context, service token_grpc.TokenServiceInterface, 
 			return nil, &models.ResponseObject{Error: *errSt, Code: 401}
 		}
 
-		return nil, errors.New(fmt.Sprintf("Unknown error in verify with object %v", err))
+		return nil, fmt.Errorf("Unknown error in verify with object %v", err)
 	}
 	return mesg, nil
 }
@@ -184,6 +194,24 @@ func verifyTokenFactory(_ context.Context, method, path string) sd.Factory {
 	}
 }
 
+func affectTokenFactory(_ context.Context, method, path string) sd.Factory {
+	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
+
+		fmt.Println("@@@@@@@@ received from consul")
+		fmt.Println(instance)
+		fmt.Println(method)
+		fmt.Println(path)
+
+		conn1, err := dialConnection(&instance)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		svc := makeConnection(conn1)
+		return makeBalancedAffectEndpoint(svc), conn1, nil
+	}
+}
+
 func main() {
 	// TODO:
 	//Remove for production, already loads on a different flow
@@ -230,10 +258,18 @@ func main() {
 	duration := 500 * time.Millisecond
 	var generateEndpoint endpoint.Endpoint
 	var verifyEndpoint endpoint.Endpoint
+	var affectEndpoint endpoint.Endpoint
 
 	serviceName := "JWT-Service"
 	instancer := consulsd.NewInstancer(client, logger, serviceName, tags, passingOnly)
 
+	{
+		factory := affectTokenFactory(ctx, "POST", "/affect")
+		endpointer := sd.NewEndpointer(instancer, factory, logger)
+		balancer := lb.NewRoundRobin(endpointer)
+		retry := lb.Retry(1, duration, balancer)
+		affectEndpoint = retry
+	}
 	{
 		factory := generateTokenFactory(ctx, "POST", "/login")
 		endpointer := sd.NewEndpointer(instancer, factory, logger)
@@ -248,10 +284,17 @@ func main() {
 		retry := lb.Retry(1, duration, balancer)
 		verifyEndpoint = retry
 	}
-	suhandle := ht.NewServer(
+
+	loginHandle := ht.NewServer(
 		generateEndpoint,
 		loginHandler,
 		encodeResponse,
+	)
+
+	logoutHandle := ht.NewServer(
+		affectEndpoint,
+		logoutHandler,
+		encodeAffectResponse,
 	)
 
 	registerhandle := ht.NewServer(
@@ -283,7 +326,9 @@ func main() {
 
 	// Api endpoints
 	r.Handle("/", greethandle)
-	r.Handle("/login", suhandle)
+	r.Handle("/login", loginHandle)
+	r.Handle("/logout", logoutHandle)
+	r.Handle("/refresh", registerhandle)
 	r.Handle("/register", registerhandle)
 	r.Handle("/verify/{serviceID}", verifyhandle)
 
@@ -328,6 +373,28 @@ func makeBalancedGenerateEndpoint(svc token_grpc.TokenServiceInterface) endpoint
 }
 
 // Endpoints are a primary abstraction in go-kit. An endpoint represents a single RPC (method in our service interface)
+func makeBalancedAffectEndpoint(svc token_grpc.TokenServiceInterface) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req, k := request.(models.TokenAffectRequest)
+		if !k {
+			if resp, ok := request.(models.ResponseObject); ok {
+
+				return resp, nil
+			}
+		}
+		if req.DesiredState > 5 {
+			return nil, errors.New("Unknown method")
+		}
+
+		v, err := affectToken(ctx, svc, req)
+		if err != nil {
+			return v, err
+		}
+		return v, nil
+	}
+}
+
+// Endpoints are a primary abstraction in go-kit. An endpoint represents a single RPC (method in our service interface)
 func makeBalancedVerifyEndpoint(svc token_grpc.TokenServiceInterface) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
 		req, k := request.(token_grpc.TokenVerifyRequest)
@@ -339,7 +406,7 @@ func makeBalancedVerifyEndpoint(svc token_grpc.TokenServiceInterface) endpoint.E
 		}
 
 		if req.Token == "" {
-			return nil, errors.New("No Token to verify- please supply a valid token!")
+			return nil, errors.New("No Token to verify- please supply a valid token")
 		}
 		v, err := verifyToken(ctx, svc, req)
 		if resp, ok := err.(models.ResponseObject); ok {
@@ -347,23 +414,39 @@ func makeBalancedVerifyEndpoint(svc token_grpc.TokenServiceInterface) endpoint.E
 		}
 
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Error in make balanced verify : %v", err))
+			return nil, fmt.Errorf("Error in make balanced verify : %v", err)
 		}
 		return v, nil
 	}
 }
 
 func encodeResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
+	w.Header().Add("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(response)
 }
 
 func encodeVerifyResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
+	w.Header().Add("Content-Type", "application/json")
 	if r, o := response.(*models.TokenVerifyResponse); o {
 		if r.Error.Code != 0 {
 			return json.NewEncoder(w).Encode(r.Error)
-		} else {
-			return json.NewEncoder(w).Encode(r.Access)
 		}
+
+		return json.NewEncoder(w).Encode(r.Access)
+
+	}
+	return json.NewEncoder(w).Encode(response)
+}
+
+func encodeAffectResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
+	w.Header().Add("Content-Type", "application/json")
+	if r, o := response.(*models.TokenAffectResponse); o {
+		if r.Error.Code != 0 {
+			return json.NewEncoder(w).Encode(r.Error)
+		}
+
+		return json.NewEncoder(w).Encode(r)
+
 	}
 	return json.NewEncoder(w).Encode(response)
 }

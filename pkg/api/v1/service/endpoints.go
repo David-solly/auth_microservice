@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -15,14 +14,11 @@ import (
 type TokenServiceEndpoints struct {
 	GenerateEndpoint endpoint.Endpoint
 	VerifyEndpoint   endpoint.Endpoint
+	AffectEndpoint   endpoint.Endpoint
 }
 
 type TokenRequest struct {
 	Claims map[string]string `json:"claims,omitempty"`
-}
-
-type TokenRequest2 struct {
-	Claims []string `json:"claims,omitempty"`
 }
 
 type TokenResponse struct {
@@ -47,6 +43,19 @@ type HealthServiceRequest struct {
 
 type HealthServiceResponse struct {
 	Status int `json:"status,omitempty"`
+}
+
+func MakeTokenServicAffectEndpoint(svc TokenServiceInterface) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(models.TokenAffectRequest)
+
+		effect, err := svc.AffectToken(ctx, req)
+
+		if err != nil {
+			return nil, err
+		}
+		return effect, nil
+	}
 }
 
 func MakeTokenServiceGenerateEndpoint(svc TokenServiceInterface) endpoint.Endpoint {
@@ -88,10 +97,27 @@ func (te TokenServiceEndpoints) Generate(ctx context.Context, claims map[string]
 	tokenRespone := resp.(TokenResponse)
 
 	if tokenRespone.Response.AccessToken == "" {
-		return nil, errors.New(fmt.Sprintf("Response was errors [%v]", tokenRespone.Error))
+		return nil, fmt.Errorf("Response was errors [%v]", tokenRespone.Error)
 	}
 
 	return &tokenRespone.Response, nil
+
+}
+
+func (te TokenServiceEndpoints) AffectToken(ctx context.Context, tokenAffectRequest models.TokenAffectRequest) (*models.TokenAffectResponse, error) {
+
+	resp, err := te.AffectEndpoint(ctx, tokenAffectRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenRespone, k := resp.(models.TokenAffectResponse)
+
+	if !k {
+		return nil, fmt.Errorf("Error Transfering request")
+	}
+
+	return &tokenRespone, nil
 
 }
 
@@ -120,7 +146,6 @@ func (te TokenServiceEndpoints) VerifyToken(ctx context.Context, tokenToverify T
 		return &models.TokenVerifyResponse{Error: models.ServiceError{Error: serviceRspone.Error, Code: serviceRspone.Code}}, nil
 	}
 
-	// fmt.Printf(("\nJumped Again after in tendpoint %v\n%v\n", resp, err)
 	return nil, models.ResponseObject{Error: fmt.Sprintf("Internal Error processsing verification"), Code: http.StatusBadRequest}
 
 }
@@ -139,14 +164,6 @@ func MakeHealthServiceCheckEndpoint(svc Health) endpoint.Endpoint {
 
 func MakeHealthServiceWatchEndpoint(svc Health) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		// req := request.(HealthServiceRequest)
-
-		// sv := HealthWatchServer{}
-		// err := svc.Watch(nil, sv)
-		// if err != nil {
-		// 	return HealthServiceResponse{Status: HealthCheckResponse_UNKNOWN}, err
-		// }
-
 		return HealthServiceResponse{Status: HealthCheckResponse_UNKNOWN}, nil
 	}
 }

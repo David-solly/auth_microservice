@@ -11,6 +11,7 @@ import (
 type grpcServer struct {
 	generate grpctransport.Handler
 	verify   grpctransport.Handler
+	affect   grpctransport.Handler
 }
 
 type grpcServerHealth struct {
@@ -18,7 +19,7 @@ type grpcServerHealth struct {
 	watch  grpctransport.Handler
 }
 
-// implement LoremServer Interface in generate.pb.go
+// implement Server Interface in generate.pb.go
 func (s *grpcServer) Generate(ctx context.Context, r *pb.TokenRequest) (*pb.TokenResponse, error) {
 	_, resp, err := s.generate.ServeGRPC(ctx, r)
 	if err != nil {
@@ -37,6 +38,16 @@ func (s *grpcServer) VerifyToken(ctx context.Context, r *pb.TokenVerifyRequest) 
 	return resp.(*pb.TokenVerifyResponse), nil
 }
 
+func (s *grpcServer) AffectToken(ctx context.Context, r *pb.TokenAffectRequest) (*pb.TokenAffectResponse, error) {
+
+	_, resp, err := s.affect.ServeGRPC(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.(*pb.TokenAffectResponse), nil
+}
+
 // create new grpc server
 func NewGRPCServer(ctx context.Context, endpoint TokenServiceEndpoints) pb.TokenServiceServer {
 	return &grpcServer{
@@ -49,6 +60,11 @@ func NewGRPCServer(ctx context.Context, endpoint TokenServiceEndpoints) pb.Token
 			endpoint.VerifyEndpoint,
 			DecodeGRPCTokenVerifyRequest,
 			EncodeGRPCTokenVerifyResponse,
+		),
+		affect: grpctransport.NewServer(
+			endpoint.AffectEndpoint,
+			DecodeGRPCTokenAffectRequest,
+			EncodeGRPCTokenAffectResponse,
 		),
 	}
 }

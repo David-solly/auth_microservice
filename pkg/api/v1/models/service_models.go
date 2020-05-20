@@ -42,6 +42,42 @@ type ServiceAccess struct {
 	Claims *jwt.MapClaims `json:"claims,omitempty"`
 }
 
+type TokenAffectRequest struct {
+	Token        string     `json:"token"`
+	DesiredState TokenState `json:"desired_state,omitempty"`
+}
+
+type TokenAffectResponse struct {
+	EffectApplied bool          `json:"effect_applied,omitempty"`
+	Error         *ServiceError `json:"error,omitempty"`
+}
+
+type TokenState int32
+
+const (
+	TokenState_WATCH      TokenState = 0
+	TokenState_LOGOUT     TokenState = 1
+	TokenState_TRACEROUTE TokenState = 2
+	TokenState_FREEZE     TokenState = 3
+	TokenState_UNFREEZE   TokenState = 4
+)
+
+var TokenState_name = map[int32]string{
+	0: "WATCH",
+	1: "LOGOUT",
+	2: "TRACEROUTE",
+	3: "FREEZE",
+	4: "UNFREEZE",
+}
+
+var TokenState_value = map[string]int32{
+	"WATCH":      0,
+	"LOGOUT":     1,
+	"TRACEROUTE": 2,
+	"FREEZE":     3,
+	"UNFREEZE":   4,
+}
+
 type TokenStatus int32
 
 const (

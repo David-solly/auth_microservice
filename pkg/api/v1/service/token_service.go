@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -43,7 +44,7 @@ type TokenServiceInterface interface {
 	Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error)
 	VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{})
 	// RenewTokens(ctx context.Context, in *TokenRenewRequest, opts ...grpc.CallOption) (*TokenResponse, error)
-	// AffectToken(ctx context.Context, in *TokenAffectRequest, opts ...grpc.CallOption) (*TokenAffectResponse, error)
+	AffectToken(ctx context.Context, tokenAffectRequest models.TokenAffectRequest) (*models.TokenAffectResponse, error)
 }
 
 type TokenService struct {
@@ -100,13 +101,81 @@ func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerif
 	return resp, nil
 }
 
+func (ts TokenService) AffectToken(ctx context.Context, tokenToAffect models.TokenAffectRequest) (*models.TokenAffectResponse, error) {
+	switch tokenToAffect.DesiredState {
+
+	case models.TokenState_LOGOUT:
+
+		resp, err := verifyAndDeleteToken(tokenToAffect.Token)
+		if err != nil {
+			return &models.TokenAffectResponse{Error: &models.ServiceError{Error: err.Error(), Code: http.StatusUnauthorized}}, nil
+		}
+
+		return resp, nil
+	}
+
+	return nil, nil
+}
+
+func verifyAndDeleteToken(token string) (*models.TokenAffectResponse, error) {
+	tokenAuth, claims, err := ExtractTokenMetadata(token)
+	if err != nil {
+		return &models.TokenAffectResponse{Error: &models.ServiceError{Error: err.Error(), Code: http.StatusUnauthorized}}, nil
+	}
+
+	_, userID, err := FetchAuth(tokenAuth)
+	if err != nil {
+		log.Print(err.Error())
+		return &models.TokenAffectResponse{Error: &models.ServiceError{Error: "Supplied Token is Unauthorized", Code: http.StatusUnauthorized}}, nil
+	}
+
+	deleteAvailable := false
+	if userID != "" {
+
+		if id, k := claims["id"]; k {
+
+			if cID, o := id.(string); o {
+
+				if cID == userID {
+					deleteAvailable = true
+				}
+			}
+		}
+	} else {
+		if _, k := claims["id"]; !k {
+			deleteAvailable = true
+		}
+	}
+
+	if !deleteAvailable {
+		return &models.TokenAffectResponse{Error: &models.ServiceError{Error: "Unauthorized to log out", Code: http.StatusUnauthorized}}, nil
+	}
+
+	affected := false
+	if deleteAvailable {
+		rowID, err1 := deleteAuth(tokenAuth.AccessUuid)
+		if err1 != nil {
+			log.Print(err1.Error())
+			return &models.TokenAffectResponse{Error: &models.ServiceError{Error: "Error while logging out", Code: http.StatusUnauthorized}}, nil
+		}
+
+		affected = rowID > 0
+	}
+
+	if !affected {
+		return &models.TokenAffectResponse{Error: &models.ServiceError{Error: "Could not log out", Code: http.StatusUnauthorized}}, nil
+	}
+	rto := models.TokenAffectResponse{EffectApplied: affected}
+	return &rto, nil
+}
+
 func verifyAndGetTokenClaims(token, service string) (*models.TokenVerifyResponse, error) {
 	tokenAuth, tokenClaims, err := ExtractTokenMetadata(token)
 	if err != nil {
 		return &models.TokenVerifyResponse{Error: models.ServiceError{Error: err.Error(), Code: http.StatusUnauthorized}}, nil
 	}
 
-	userID, err := FetchAuth(tokenAuth)
+	userID, _, err := FetchAuth(tokenAuth)
 	if err != nil {
 		return &models.TokenVerifyResponse{Error: models.ServiceError{Error: err.Error(), Code: http.StatusUnauthorized}}, nil
 	}
@@ -168,19 +237,26 @@ func deleteAuth(uuid string) (int64, error) {
 }
 
 // FetchAuth : ensure the token hasn't expired
-func FetchAuth(authD *models.AccessDetails) (uint64, error) {
+func FetchAuth(authD *models.AccessDetails) (uint64, string, error) {
 	userid, err := client.Get(authD.AccessUuid).Result()
 	if err != nil {
-		return 0, err
+		return 0, "", err
+	}
+	if userid == "" {
+		return 0, userid, nil
 	}
 	userID, _ := strconv.ParseUint(userid, 10, 64)
-	return userID, nil
+	return userID, userid, nil
 }
 
 func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.MapClaims, error) {
 	token, err := VerifyTokenIntegrity(tokenString)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if !token.Valid {
+		return nil, nil, jwt.ErrInvalidKey
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)

@@ -22,8 +22,16 @@ func New(conn *grpc.ClientConn) token_grpc.TokenServiceInterface {
 		pb.TokenVerifyResponse{},
 	).Endpoint()
 
+	var tokenAffectEndpoint = grpctransport.NewClient(
+		conn, "v1.TokenService", "AffectToken",
+		token_grpc.EncodeGRPCTokenAffectRequest,
+		token_grpc.DecodeGRPCTokenAffectResponse,
+		pb.TokenAffectResponse{},
+	).Endpoint()
+
 	return token_grpc.TokenServiceEndpoints{
 		GenerateEndpoint: tokenEndpoint,
 		VerifyEndpoint:   tokenVerifyEndpoint,
+		AffectEndpoint:   tokenAffectEndpoint,
 	}
 }

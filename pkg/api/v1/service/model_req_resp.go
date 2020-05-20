@@ -44,8 +44,46 @@ func DecodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, err
 	}, nil
 }
 
-/// Verify Request response - encode/decode
+//Encode and Decode Token Affect Request
+func EncodeGRPCTokenAffectRequest(_ context.Context, r interface{}) (interface{}, error) {
+	n := r.(models.TokenAffectRequest)
 
+	return &pb.TokenAffectRequest{Token: n.Token, DesiredState: pb.TokenState(n.DesiredState)}, nil
+}
+
+func DecodeGRPCTokenAffectRequest(ctx context.Context, r interface{}) (interface{}, error) {
+	req := r.(*pb.TokenAffectRequest)
+	return models.TokenAffectRequest{Token: req.Token, DesiredState: models.TokenState(req.DesiredState)}, nil
+}
+
+// Encode and Decode Token Response
+func EncodeGRPCTokenAffectResponse(_ context.Context, r interface{}) (interface{}, error) {
+	resp := r.(*models.TokenAffectResponse)
+	if resp.Error != nil {
+		return &pb.TokenAffectResponse{
+			Error: &pb.ServiceError{
+				Error: resp.Error.Error, Code: int32(resp.Error.Code)},
+			EffectApplied: resp.EffectApplied}, nil
+	}
+	return &pb.TokenAffectResponse{
+		EffectApplied: resp.EffectApplied}, nil
+}
+
+func DecodeGRPCTokenAffectResponse(_ context.Context, r interface{}) (interface{}, error) {
+	resp := r.(*pb.TokenAffectResponse)
+	if resp.Error == nil {
+		return models.TokenAffectResponse{
+			EffectApplied: resp.EffectApplied,
+		}, nil
+	}
+	return models.TokenAffectResponse{
+		EffectApplied: resp.EffectApplied,
+		Error: &models.ServiceError{
+			Error: resp.Error.Error, Code: int(resp.Error.Code)},
+	}, nil
+}
+
+/// Verify Request response - encode/decode
 func EncodeGRPCTokenVerifyRequest(_ context.Context, r interface{}) (interface{}, error) {
 	n := r.(TokenVerifyRequest)
 
@@ -67,14 +105,12 @@ func EncodeGRPCTokenVerifyResponse(_ context.Context, r interface{}) (interface{
 	}
 
 	if resp, k := r.(*models.ResponseObject); k {
-		// fmt.Printf(("encoding respOb \nresp:%v\ntype:%T", resp, resp)
+
 		return &pb.TokenVerifyResponse{
 			Error: &pb.ServiceError{
 				Error: resp.Error, Code: int32(resp.Code)},
 		}, nil
 	}
-
-	// fmt.Printf(("skipping \nresp:%v\ntype:%T", r, r)
 
 	return &pb.TokenVerifyResponse{
 		Error: &pb.ServiceError{
@@ -86,15 +122,12 @@ func DecodeGRPCTokenVerifyResponse(_ context.Context, r interface{}) (interface{
 	// fmt.Printf(("Decoding response after grpc :%T ~~~~~~########", r)
 
 	if resp, k := r.(*pb.TokenVerifyResponse); k {
-		// fmt.Printf(("Decoding response :%vresp ~~######", r)
 		id, _ := strconv.ParseUint(resp.Access.UserId, 10, 64)
 
-		// fmt.Printf(("\nDecoding response errors:%v ~~######\n", resp.Error)
 		if resp.Error != nil {
 			return &models.ResponseObject{Error: resp.Error.Error, Code: int(resp.Error.Code)}, nil
 		}
 
-		// fmt.Printf(("\nBypassed to Decoding response errors string:%v ~~######\n", resp)
 		c := MergeClaims(resp.Access.Claims)
 
 		return &models.TokenVerifyResponse{Access: models.ServiceAccess{
