@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
 	"github.com/docker/docker/pkg/testutil/assert"
 )
 
@@ -41,6 +42,30 @@ func TestJWTExtraction(t *testing.T) {
 
 	})
 
+}
+
+func TestReadingRefreshData(t *testing.T) {
+	RedisInit()
+	k := models.AccessDetails{RefreshUUID: "c635b068-8719-449d-ad66-5298f6046f51"}
+	t.Run("VERIFY and REDIS READ claims from UUID", func(t *testing.T) {
+		got, err := FetchRefresh(&k)
+		assert.NilError(t, err)
+		assert.Equal(t, reflect.TypeOf(got), reflect.TypeOf(map[string]string{}))
+
+	})
+	t.Run("VERIFY and REDIS READ claims from UUID Fail", func(t *testing.T) {
+		got, err := FetchRefresh(&k)
+		assert.NilError(t, err)
+		assert.Equal(t, reflect.TypeOf(got), reflect.TypeOf(map[string]string{}))
+
+	})
+
+	t.Run("SHOuld fail and REDIS READ claims from UUID", func(t *testing.T) {
+		got, err := FetchRefresh(&k)
+		assert.NilError(t, err)
+		assert.Equal(t, reflect.TypeOf(got), reflect.TypeOf(map[string]string{}))
+
+	})
 }
 
 func BenchmarkExtract(t *testing.B) {

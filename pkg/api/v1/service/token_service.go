@@ -27,7 +27,7 @@ func RedisInit() {
 	//Initializing redis
 	dsn := os.Getenv("REDIS_DSN")
 	if len(dsn) == 0 {
-		dsn = "localhost:6379"
+		dsn = "192.168.99.100:6379"
 	}
 	client = redis.NewClient(&redis.Options{
 		Addr: dsn, //redis port
@@ -247,6 +247,21 @@ func FetchAuth(authD *models.AccessDetails) (uint64, string, error) {
 	}
 	userID, _ := strconv.ParseUint(userid, 10, 64)
 	return userID, userid, nil
+}
+
+// FetchRefresh : ensure the token hasn't expired
+func FetchRefresh(authD *models.AccessDetails) (map[string]string, error) {
+	claims, err := client.Get(authD.RefreshUUID).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	claimsSaved := make((map[string]string))
+	e := json.Unmarshal([]byte(claims), &claimsSaved)
+	if e != nil {
+		return nil, e
+	}
+	return claimsSaved, nil
 }
 
 func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.MapClaims, error) {
