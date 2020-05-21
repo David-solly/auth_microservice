@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
@@ -44,7 +45,7 @@ func RedisInit() {
 type TokenServiceInterface interface {
 	Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error)
 	VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{})
-	// RenewTokens(ctx context.Context, in *TokenRenewRequest, opts ...grpc.CallOption) (*TokenResponse, error)
+	RenewTokens(ctx context.Context, token TokenRenewRequest) (*models.AccessTokens, error)
 	AffectToken(ctx context.Context, tokenAffectRequest models.TokenAffectRequest) (*models.TokenAffectResponse, error)
 }
 
@@ -55,8 +56,8 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 	return generateTokenPair(claims)
 }
 
-func (ts TokenService) RefreshTokens(ctx context.Context, token string) (*models.AccessTokens, error) {
-	return refreshTokenPair(token)
+func (ts TokenService) RenewTokens(ctx context.Context, token TokenRenewRequest) (*models.AccessTokens, error) {
+	return refreshTokenPair(token.RefreshToken)
 }
 
 func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{}) {
@@ -92,13 +93,20 @@ func refreshTokenPair(token string) (*models.AccessTokens, error) {
 
 	refreshClaims, err := FetchRefresh(ids)
 	if err != nil {
-		return nil, err
+		if strings.Compare(err.Error(), redis.Nil.Error()) == 0 {
+			fmt.Println("Access tokens already removed")
+
+			return nil, errors.New("Session timed out. Please log in... ")
+		}
+		log.Println(err)
+		return nil, errors.New("Unknown Error caused session time out ")
+
 	}
 
 	if ids.AccessUuid != "" {
 		id, err := deleteAuth(ids.AccessUuid)
 		if err != nil {
-			if err.Error() == redis.Nil.Error() {
+			if strings.Compare(err.Error(), redis.Nil.Error()) == 0 {
 				fmt.Println("Access token already expired")
 				id = 0
 			} else {
@@ -106,14 +114,14 @@ func refreshTokenPair(token string) (*models.AccessTokens, error) {
 			}
 		}
 
-		if id < 1 {
+		if id < 0 {
 			return nil, errors.New("Error deleting token")
 		}
 	}
 
 	id, err := deleteAuth(ids.RefreshUUID)
 	if err != nil {
-		if err.Error() == redis.Nil.Error() {
+		if strings.Contains(err.Error(), redis.Nil.Error()) {
 			fmt.Println("Refresh token already expired")
 			id = 0
 		} else {

@@ -71,6 +71,7 @@ func main() {
 		GenerateEndpoint: token_grpc.MakeTokenServiceGenerateEndpoint(svc),
 		VerifyEndpoint:   token_grpc.MakeTokenServiceVerifyEndpoint(svc),
 		AffectEndpoint:   token_grpc.MakeTokenServicAffectEndpoint(svc),
+		RenewEndpoint:    token_grpc.MakeTokenServiceRenewEndpoint(svc),
 	}
 
 	var svcH token_grpc.Health

@@ -11,6 +11,19 @@ import (
 	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
 )
 
+// Encode and Decode Renew request
+func DecodeGRPCTokenRenewRequest(ctx context.Context, r interface{}) (interface{}, error) {
+	req := r.(*pb.TokenRenewRequest)
+	return TokenRenewRequest{RefreshToken: req.RefreshToken}, nil
+}
+
+//Encode and Decode Token Request
+func EncodeGRPCTokenRenewRequest(_ context.Context, r interface{}) (interface{}, error) {
+	n := r.(TokenRenewRequest)
+
+	return &pb.TokenRenewRequest{RefreshToken: n.RefreshToken}, nil
+}
+
 //Encode and Decode Token Request
 func EncodeGRPCTokenRequest(_ context.Context, r interface{}) (interface{}, error) {
 	n := r.(TokenRequest)
@@ -25,7 +38,9 @@ func DecodeGRPCTokenRequest(ctx context.Context, r interface{}) (interface{}, er
 
 // Encode and Decode Token Response
 func EncodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, error) {
+	fmt.Printf("Encoding response - %v", r)
 	resp := r.(TokenResponse)
+
 	return &pb.TokenResponse{
 		Error: &pb.ServiceError{
 			Error: resp.Error.Error, Code: int32(resp.Error.Code)},
@@ -36,12 +51,18 @@ func EncodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, err
 
 func DecodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, error) {
 	resp := r.(*pb.TokenResponse)
-	return TokenResponse{
+	fmt.Printf("\nin grpc decode resp : response=%v\n", resp)
+	rs := TokenResponse{
+		Error: models.ServiceError{Error: resp.Error.Error, Code: int(resp.Error.Code)},
 		Response: models.AccessTokens{
 			AccessToken:  resp.Tokens.AuthToken,
 			RefreshToken: resp.Tokens.RefreshToken,
 		},
-	}, nil
+	}
+
+	fmt.Printf("\nEncoded response - %v\n", rs)
+	return rs, nil
+
 }
 
 //Encode and Decode Token Affect Request

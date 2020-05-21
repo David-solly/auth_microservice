@@ -5,7 +5,7 @@ package v1;
 service TokenService{
     rpc Generate(TokenRequest)returns (TokenResponse);
     rpc VerifyToken(TokenVerifyRequest) returns (TokenVerifyResponse);
-    // rpc RenewTokens(TokenRenewRequest) returns (TokenResponse);
+    rpc RenewTokens(TokenRenewRequest) returns (TokenResponse);
     rpc AffectToken(TokenAffectRequest)returns (TokenAffectResponse);
 }
 

@@ -34,7 +34,7 @@ func greetingHandler(_ context.Context, r *http.Request) (interface{}, error) {
 
 func verifyHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	if r.Method != http.MethodPost {
-		return nil, http.ErrBodyNotAllowed
+		return nil, http.ErrNotSupported
 	}
 	token, ok := extractAuthToken(r)
 	if !ok {
@@ -43,6 +43,20 @@ func verifyHandler(_ context.Context, r *http.Request) (interface{}, error) {
 	}
 	serviceID := chi.URLParam(r, "serviceID")
 	return token_grpc.TokenVerifyRequest{Token: token, Service: serviceID}, nil
+
+}
+
+func refreshHandler(_ context.Context, r *http.Request) (interface{}, error) {
+	if r.Method != http.MethodPost {
+		return nil, http.ErrNotSupported
+	}
+	token, ok := extractAuthToken(r)
+	if !ok {
+		return models.ResponseObject{Error: token, Code: http.StatusUnauthorized}, nil
+
+	}
+
+	return token_grpc.TokenRenewRequest{RefreshToken: token}, nil
 
 }
 

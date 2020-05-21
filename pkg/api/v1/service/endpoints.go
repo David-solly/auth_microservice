@@ -15,10 +15,15 @@ type TokenServiceEndpoints struct {
 	GenerateEndpoint endpoint.Endpoint
 	VerifyEndpoint   endpoint.Endpoint
 	AffectEndpoint   endpoint.Endpoint
+	RenewEndpoint    endpoint.Endpoint
 }
 
 type TokenRequest struct {
 	Claims map[string]string `json:"claims,omitempty"`
+}
+
+type TokenRenewRequest struct {
+	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
 type TokenResponse struct {
@@ -86,6 +91,21 @@ func MakeTokenServiceVerifyEndpoint(svc TokenServiceInterface) endpoint.Endpoint
 	}
 }
 
+func MakeTokenServiceRenewEndpoint(svc TokenServiceInterface) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(TokenRenewRequest)
+
+		tkns, err := svc.RenewTokens(ctx, req)
+
+		fmt.Printf("\nEndpoint invoked tkns:%v\nErr:%v\n", tkns, err)
+
+		if err != nil {
+			return TokenResponse{Error: models.ServiceError{Error: err.Error(), Code: http.StatusExpectationFailed}}, nil
+		}
+		return TokenResponse{Response: *tkns}, nil
+	}
+}
+
 func (te TokenServiceEndpoints) Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error) {
 	req := TokenRequest{Claims: claims}
 
@@ -118,6 +138,21 @@ func (te TokenServiceEndpoints) AffectToken(ctx context.Context, tokenAffectRequ
 	}
 
 	return &tokenRespone, nil
+
+}
+
+func (te TokenServiceEndpoints) RenewTokens(ctx context.Context, refreshToken TokenRenewRequest) (*models.AccessTokens, error) {
+
+	resp, err := te.RenewEndpoint(ctx, refreshToken)
+	fmt.Printf("Renewtokens endpoint - %v", resp)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenRespone := resp.(TokenResponse)
+
+	fmt.Printf("Renewtokens endpoint after - %v", tokenRespone)
+	return &tokenRespone.Response, nil
 
 }
 

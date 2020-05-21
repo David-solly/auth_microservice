@@ -111,6 +111,17 @@ func generateToken(ctx context.Context, service token_grpc.TokenServiceInterface
 	return mesg, nil
 }
 
+// call renewToken service
+func renewToken(ctx context.Context, service token_grpc.TokenServiceInterface, token token_grpc.TokenRenewRequest) (*models.AccessTokens, error) {
+	mesg, err := service.RenewTokens(ctx, token)
+	fmt.Printf("\nRenew token finished - msg:%v\nerr:%v\n", mesg, err)
+	if err != nil {
+		ilog.Fatalln(err.Error())
+		return nil, err
+	}
+	return mesg, nil
+}
+
 // call generateToken service
 func affectToken(ctx context.Context, service token_grpc.TokenServiceInterface, req models.TokenAffectRequest) (*models.TokenAffectResponse, error) {
 	mesg, err := service.AffectToken(ctx, req)
@@ -212,6 +223,24 @@ func affectTokenFactory(_ context.Context, method, path string) sd.Factory {
 	}
 }
 
+func renewTokenFactory(_ context.Context, method, path string) sd.Factory {
+	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
+
+		fmt.Println("@@@@@@@@ received from consul")
+		fmt.Println(instance)
+		fmt.Println(method)
+		fmt.Println(path)
+
+		conn1, err := dialConnection(&instance)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		svc := makeConnection(conn1)
+		return makeBalancedRenewEndpoint(svc), conn1, nil
+	}
+}
+
 func main() {
 	// TODO:
 	//Remove for production, already loads on a different flow
@@ -259,6 +288,7 @@ func main() {
 	var generateEndpoint endpoint.Endpoint
 	var verifyEndpoint endpoint.Endpoint
 	var affectEndpoint endpoint.Endpoint
+	var renewEndpoint endpoint.Endpoint
 
 	serviceName := "JWT-Service"
 	instancer := consulsd.NewInstancer(client, logger, serviceName, tags, passingOnly)
@@ -283,6 +313,14 @@ func main() {
 		balancer := lb.NewRoundRobin(endpointer)
 		retry := lb.Retry(1, duration, balancer)
 		verifyEndpoint = retry
+	}
+
+	{
+		factory := renewTokenFactory(ctx, "POST", "/renew")
+		endpointer := sd.NewEndpointer(instancer, factory, logger)
+		balancer := lb.NewRoundRobin(endpointer)
+		retry := lb.Retry(1, duration, balancer)
+		renewEndpoint = retry
 	}
 
 	loginHandle := ht.NewServer(
@@ -314,6 +352,11 @@ func main() {
 		verifyHandler,
 		encodeVerifyResponse,
 	)
+	renewhandle := ht.NewServer(
+		renewEndpoint,
+		refreshHandler,
+		encodeRenewResponse,
+	)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -322,13 +365,13 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// Set request timeout
-	r.Use(middleware.Timeout(10 * time.Second))
+	r.Use(middleware.Timeout(10 * time.Minute))
 
 	// Api endpoints
 	r.Handle("/", greethandle)
 	r.Handle("/login", loginHandle)
 	r.Handle("/logout", logoutHandle)
-	r.Handle("/refresh", registerhandle)
+	r.Handle("/refresh", renewhandle)
 	r.Handle("/register", registerhandle)
 	r.Handle("/verify/{serviceID}", verifyhandle)
 
@@ -365,6 +408,28 @@ func makeBalancedGenerateEndpoint(svc token_grpc.TokenServiceInterface) endpoint
 			return nil, errors.New("No claims to encode")
 		}
 		v, err := generateToken(ctx, svc, req.Claims)
+		if err != nil {
+			return v, err
+		}
+		return v, nil
+	}
+}
+
+// Endpoints are a primary abstraction in go-kit. An endpoint represents a single RPC (method in our service interface)
+func makeBalancedRenewEndpoint(svc token_grpc.TokenServiceInterface) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req, k := request.(token_grpc.TokenRenewRequest)
+		if !k {
+			if resp, ok := request.(models.ResponseObject); ok {
+
+				return resp, nil
+			}
+		}
+		if req.RefreshToken == "" {
+			return nil, errors.New("No Token provided to encode")
+		}
+
+		v, err := renewToken(ctx, svc, req)
 		if err != nil {
 			return v, err
 		}
@@ -422,6 +487,19 @@ func makeBalancedVerifyEndpoint(svc token_grpc.TokenServiceInterface) endpoint.E
 
 func encodeResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
 	w.Header().Add("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(response)
+}
+
+func encodeRenewResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
+	w.Header().Add("Content-Type", "application/json")
+	if r, o := response.(*token_grpc.TokenResponse); o {
+		if r.Error.Code != 0 {
+			return json.NewEncoder(w).Encode(r.Error)
+		}
+
+		return json.NewEncoder(w).Encode(r.Response)
+
+	}
 	return json.NewEncoder(w).Encode(response)
 }
 
