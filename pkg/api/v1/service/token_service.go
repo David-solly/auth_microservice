@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -51,45 +52,11 @@ type TokenService struct {
 }
 
 func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error) {
+	return generateTokenPair(claims)
+}
 
-	td := models.TokenDetails{}
-	td.AtExpiry = time.Now().Add(time.Minute * 15).Unix()
-	td.AccessUUID = uuid.NewV4().String()
-
-	td.RtExpiry = time.Now().Add(time.Hour * 24 * 7).Unix()
-	td.RefreshUUID = uuid.NewV4().String()
-
-	// create access token
-	atClaims := MergeClaims(claims)
-	atClaims["access_uuid"] = td.AccessUUID
-	atClaims["exp"] = td.AtExpiry
-	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
-	token, err := at.SignedString([]byte(os.Getenv("JWT_SECRET")))
-	if err != nil {
-		return nil, err
-	}
-
-	//create refresh token
-	rtClaims := jwt.MapClaims{}
-	rtClaims["id"] = atClaims["id"]
-	rtClaims["refresh_uuid"] = td.RefreshUUID
-	rtClaims["exp"] = td.RtExpiry
-	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
-	rtoken, rerr := rt.SignedString([]byte(os.Getenv("JWT_R_SECRET")))
-	if rerr != nil {
-		return nil, rerr
-	}
-
-	td.AccessToken = token
-	td.RefreshToken = rtoken
-
-	tokens, err := createAuth(atClaims["id"].(string), &td, claims)
-	if err != nil {
-		return nil, err
-	}
-
-	return tokens, nil
-
+func (ts TokenService) RefreshTokens(ctx context.Context, token string) (*models.AccessTokens, error) {
+	return refreshTokenPair(token)
 }
 
 func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{}) {
@@ -117,8 +84,94 @@ func (ts TokenService) AffectToken(ctx context.Context, tokenToAffect models.Tok
 	return nil, nil
 }
 
+func refreshTokenPair(token string) (*models.AccessTokens, error) {
+	ids, _, err := ExtractTokenMetadata(token, true)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshClaims, err := FetchRefresh(ids)
+	if err != nil {
+		return nil, err
+	}
+
+	if ids.AccessUuid != "" {
+		id, err := deleteAuth(ids.AccessUuid)
+		if err != nil {
+			if err.Error() == redis.Nil.Error() {
+				fmt.Println("Access token already expired")
+				id = 0
+			} else {
+				return nil, err
+			}
+		}
+
+		if id < 1 {
+			return nil, errors.New("Error deleting token")
+		}
+	}
+
+	id, err := deleteAuth(ids.RefreshUUID)
+	if err != nil {
+		if err.Error() == redis.Nil.Error() {
+			fmt.Println("Refresh token already expired")
+			id = 0
+		} else {
+			return nil, err
+		}
+	}
+
+	if id < 0 {
+		return nil, errors.New("Error deleting token")
+	}
+
+	return generateTokenPair(refreshClaims)
+}
+
+func generateTokenPair(claims map[string]string) (*models.AccessTokens, error) {
+
+	td := models.TokenDetails{}
+	td.AtExpiry = time.Now().Add(time.Minute * 15).Unix()
+	td.AccessUUID = uuid.NewV4().String()
+
+	td.RtExpiry = time.Now().Add(time.Hour * 24 * 7).Unix()
+	td.RefreshUUID = uuid.NewV4().String()
+
+	// create access token
+	atClaims := MergeClaims(claims)
+	atClaims["access_uuid"] = td.AccessUUID
+	atClaims["exp"] = td.AtExpiry
+	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
+	token, err := at.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		return nil, err
+	}
+
+	//create refresh token
+	rtClaims := jwt.MapClaims{}
+	rtClaims["id"] = atClaims["id"]
+	rtClaims["access_uuid"] = td.AccessUUID
+	rtClaims["refresh_uuid"] = td.RefreshUUID
+	rtClaims["exp"] = td.RtExpiry
+	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
+	rtoken, rerr := rt.SignedString([]byte(os.Getenv("JWT_R_SECRET")))
+	if rerr != nil {
+		return nil, rerr
+	}
+
+	td.AccessToken = token
+	td.RefreshToken = rtoken
+
+	tokens, err := createAuth(atClaims["id"].(string), &td, claims)
+	if err != nil {
+		return nil, err
+	}
+
+	return tokens, nil
+}
+
 func verifyAndDeleteToken(token string) (*models.TokenAffectResponse, error) {
-	tokenAuth, claims, err := ExtractTokenMetadata(token)
+	tokenAuth, claims, err := ExtractTokenMetadata(token, false)
 	if err != nil {
 		return &models.TokenAffectResponse{Error: &models.ServiceError{Error: err.Error(), Code: http.StatusUnauthorized}}, nil
 	}
@@ -170,7 +223,7 @@ func verifyAndDeleteToken(token string) (*models.TokenAffectResponse, error) {
 }
 
 func verifyAndGetTokenClaims(token, service string) (*models.TokenVerifyResponse, error) {
-	tokenAuth, tokenClaims, err := ExtractTokenMetadata(token)
+	tokenAuth, tokenClaims, err := ExtractTokenMetadata(token, false)
 	if err != nil {
 		return &models.TokenVerifyResponse{Error: models.ServiceError{Error: err.Error(), Code: http.StatusUnauthorized}}, nil
 	}
@@ -198,6 +251,14 @@ func MergeClaims(claims map[string]string) jwt.MapClaims {
 	c := jwt.MapClaims{}
 	for claim, value := range claims {
 		c[claim] = value
+	}
+	return c
+}
+
+func MergeClaimsReverse(claims jwt.MapClaims) map[string]string {
+	c := make(map[string]string)
+	for claim, value := range claims {
+		c[claim] = fmt.Sprintf("%q", value)
 	}
 	return c
 }
@@ -264,21 +325,32 @@ func FetchRefresh(authD *models.AccessDetails) (map[string]string, error) {
 	return claimsSaved, nil
 }
 
-func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.MapClaims, error) {
-	token, err := VerifyTokenIntegrity(tokenString, false)
+func ExtractTokenMetadata(tokenString string, refresh bool) (*models.AccessDetails, jwt.MapClaims, error) {
+	token, err := VerifyTokenIntegrity(tokenString, refresh)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if !token.Valid {
-		return nil, nil, jwt.ErrInvalidKey
-	}
-
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
-		accessUuid, ok := claims["access_uuid"].(string)
-		if !ok {
-			return nil, nil, err
+
+		var accessUUID string
+		var RefreshUUID string
+
+		if !refresh {
+			accessUUID, ok = claims["access_uuid"].(string)
+			if !ok {
+				return nil, nil, err
+			}
+		} else {
+			RefreshUUID, ok = claims["refresh_uuid"].(string)
+			if !ok {
+				return nil, nil, err
+			}
+			accessUUID, ok = claims["access_uuid"].(string)
+			if !ok {
+				return nil, nil, err
+			}
 		}
 
 		claimID := claims["id"]
@@ -288,8 +360,9 @@ func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.MapCla
 		}
 
 		return &models.AccessDetails{
-			AccessUuid: accessUuid,
-			UserId:     userID,
+			AccessUuid:  accessUUID,
+			RefreshUUID: RefreshUUID,
+			UserId:      userID,
 		}, claims, nil
 	}
 	return nil, nil, err
