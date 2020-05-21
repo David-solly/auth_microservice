@@ -2,6 +2,7 @@ package service
 
 import (
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/docker/docker/pkg/testutil/assert"
@@ -12,11 +13,42 @@ const refreshTokenToTest = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE1OTA
 
 func TestJWTExtraction(t *testing.T) {
 	os.Setenv("JWT_SECRET", "superduperdupersecuresecret23232string6568_55")
+	os.Setenv("JWT_R_SECRET", "superduperdupersecsjld_kdkjuresecret23232string2d545565656_")
 	t.Run("VERIFY and EXTRACT jwt token", func(t *testing.T) {
-		got, err := VerifyTokenIntegrity(accesstokenToTest)
+		got, err := VerifyTokenIntegrity(accesstokenToTest, false)
+		assert.Error(t, err, "Invalid")
+		assert.NotNil(t, got)
+
+	})
+	t.Run("VERIFY and EXTRACT REFRESH jwt token", func(t *testing.T) {
+		got, err := VerifyTokenIntegrity(refreshTokenToTest, true)
 		assert.NilError(t, err)
 		assert.NotNil(t, got)
 
 	})
 
+	t.Run("FAIL to VERIFY and EXTRACT REFRESH jwt token", func(t *testing.T) {
+		got, err := VerifyTokenIntegrity(refreshTokenToTest, false)
+		assert.Error(t, err, "Invalid")
+		assert.NotNil(t, got)
+
+	})
+
+	t.Run("VERIFY and EXTRACT EMPTY jwt token", func(t *testing.T) {
+		got, err := VerifyTokenIntegrity("", false)
+		assert.Error(t, err, "Invalid")
+		assert.Equal(t, true, reflect.ValueOf(got).IsNil())
+
+	})
+
+}
+
+func BenchmarkExtract(t *testing.B) {
+	os.Setenv("JWT_SECRET", "superduperdupersecuresecret23232string6568_55")
+	t.Run("EXTRACT valid TOKEN from JWT", func(t *testing.B) {
+		for i := 0; i < t.N; i++ {
+			_, _ = VerifyTokenIntegrity(accesstokenToTest, false)
+		}
+
+	})
 }

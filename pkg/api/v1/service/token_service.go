@@ -250,7 +250,7 @@ func FetchAuth(authD *models.AccessDetails) (uint64, string, error) {
 }
 
 func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.MapClaims, error) {
-	token, err := VerifyTokenIntegrity(tokenString)
+	token, err := VerifyTokenIntegrity(tokenString, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -280,10 +280,13 @@ func ExtractTokenMetadata(tokenString string) (*models.AccessDetails, jwt.MapCla
 	return nil, nil, err
 }
 
-func VerifyTokenIntegrity(tokenString string) (*jwt.Token, error) {
+func VerifyTokenIntegrity(tokenString string, isRfresh bool) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Token signing error, unexpected method: %v", token.Header["alg"])
+		}
+		if isRfresh {
+			return []byte(os.Getenv("JWT_R_SECRET")), nil
 		}
 		return []byte(os.Getenv("JWT_SECRET")), nil
 	})
@@ -295,7 +298,7 @@ func VerifyTokenIntegrity(tokenString string) (*jwt.Token, error) {
 }
 
 func TokenValid(tokenString string) error {
-	token, err := VerifyTokenIntegrity(tokenString)
+	token, err := VerifyTokenIntegrity(tokenString, false)
 	if err != nil {
 		return err
 	}
