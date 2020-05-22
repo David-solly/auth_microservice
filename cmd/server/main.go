@@ -147,4 +147,7 @@ func notifyOnStart() {
 run command
 go run . -consul.addr localhost -consul.port 8500 -advertise.addr localhost -advertise.port 8081 -health.port 8082
 
+//debuggings args
+"args": ["-consul.addr", "localhost", "-consul.port", "8500","-advertise.addr", "localhost","-advertise.port", "8081","-health.port", "8082"]
+
 */

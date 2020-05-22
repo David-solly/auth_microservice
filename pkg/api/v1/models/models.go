@@ -35,7 +35,6 @@ func (c *TokenVerifyResponse) MapClaims() map[string]string {
 	if c.Access.Claims == nil {
 		return claims
 	}
-	// fmt.Printf(("\nClaims in mapClaims resposne\n%v\n##", c.Access.Claims)
 
 	for x, e := range *c.Access.Claims {
 		if sc, k := e.(string); k {

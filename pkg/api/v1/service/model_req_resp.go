@@ -38,8 +38,7 @@ func DecodeGRPCTokenRequest(ctx context.Context, r interface{}) (interface{}, er
 
 // Encode and Decode Token Response
 func EncodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, error) {
-	fmt.Printf("Encoding response - %v", r)
-	resp := r.(TokenResponse)
+	resp := r.(*TokenResponse)
 
 	return &pb.TokenResponse{
 		Error: &pb.ServiceError{
@@ -51,7 +50,6 @@ func EncodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, err
 
 func DecodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, error) {
 	resp := r.(*pb.TokenResponse)
-	fmt.Printf("\nin grpc decode resp : response=%v\n", resp)
 	rs := TokenResponse{
 		Error: models.ServiceError{Error: resp.Error.Error, Code: int(resp.Error.Code)},
 		Response: models.AccessTokens{
@@ -59,8 +57,6 @@ func DecodeGRPCTokenResponse(_ context.Context, r interface{}) (interface{}, err
 			RefreshToken: resp.Tokens.RefreshToken,
 		},
 	}
-
-	fmt.Printf("\nEncoded response - %v\n", rs)
 	return rs, nil
 
 }
@@ -118,7 +114,6 @@ func DecodeGRPCTokenVerifyRequest(ctx context.Context, r interface{}) (interface
 
 // Encode and Decode Token Response
 func EncodeGRPCTokenVerifyResponse(_ context.Context, r interface{}) (interface{}, error) {
-	// fmt.Printf(("Model resp -EncodeGRPCTokenVerifyResponse \nresp:%v\ntype:%T", r, r)
 
 	if resp, k := r.(*models.TokenVerifyResponse); k {
 		return &pb.TokenVerifyResponse{Access: &pb.ServiceAccess{
@@ -140,7 +135,6 @@ func EncodeGRPCTokenVerifyResponse(_ context.Context, r interface{}) (interface{
 }
 
 func DecodeGRPCTokenVerifyResponse(_ context.Context, r interface{}) (interface{}, error) {
-	// fmt.Printf(("Decoding response after grpc :%T ~~~~~~########", r)
 
 	if resp, k := r.(*pb.TokenVerifyResponse); k {
 		id, _ := strconv.ParseUint(resp.Access.UserId, 10, 64)

@@ -112,11 +112,10 @@ func generateToken(ctx context.Context, service token_grpc.TokenServiceInterface
 }
 
 // call renewToken service
-func renewToken(ctx context.Context, service token_grpc.TokenServiceInterface, token token_grpc.TokenRenewRequest) (*models.AccessTokens, error) {
+func renewToken(ctx context.Context, service token_grpc.TokenServiceInterface, token token_grpc.TokenRenewRequest) (*token_grpc.TokenResponse, error) {
 	mesg, err := service.RenewTokens(ctx, token)
-	fmt.Printf("\nRenew token finished - msg:%v\nerr:%v\n", mesg, err)
 	if err != nil {
-		ilog.Fatalln(err.Error())
+		ilog.Print(err.Error())
 		return nil, err
 	}
 	return mesg, nil
@@ -426,7 +425,7 @@ func makeBalancedRenewEndpoint(svc token_grpc.TokenServiceInterface) endpoint.En
 			}
 		}
 		if req.RefreshToken == "" {
-			return nil, errors.New("No Token provided to encode")
+			return nil, errors.New("No Refresh Token provided to encode")
 		}
 
 		v, err := renewToken(ctx, svc, req)
@@ -496,6 +495,9 @@ func encodeRenewResponse(_ context.Context, w http.ResponseWriter, response inte
 		if r.Error.Code != 0 {
 			return json.NewEncoder(w).Encode(r.Error)
 		}
+		if r.Response.RefreshToken == "" {
+			return json.NewEncoder(w).Encode(models.ResponseObject{Error: "Invalid Request token", Code: http.StatusBadRequest})
+		}
 
 		return json.NewEncoder(w).Encode(r.Response)
 
@@ -556,5 +558,8 @@ func genError(errorString string, errorCode int) *[]byte {
 /*
 run command
 go run . -consul.addr localhost -consul.port 8500
+
+//debug args
+  "args": ["-consul.addr", "localhost", "-consul.port", "8500"]
 
 */

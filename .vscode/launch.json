@@ -11,7 +11,18 @@
       "mode": "auto",
       "program": "${fileDirname}",
       "env": {},
-      "args": ["-consul.addr", "localhost", "-consul.port", "8500"]
+      "args": [
+        "-consul.addr",
+        "localhost",
+        "-consul.port",
+        "8500",
+        "-advertise.addr",
+        "localhost",
+        "-advertise.port",
+        "8081",
+        "-health.port",
+        "8082"
+      ]
     }
   ]
 }

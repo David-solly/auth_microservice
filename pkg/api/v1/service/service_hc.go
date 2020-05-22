@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"log"
 
 	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
 )
@@ -22,7 +21,6 @@ type HealthService struct {
 }
 
 func (HealthService) Check(_ context.Context, service string) (int, error) {
-	log.Printf("service is=%v", service)
 	//Service health checks here...
 	switch service {
 	case "grpc.health.v1.Health":

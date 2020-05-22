@@ -72,7 +72,7 @@ func MakeTokenServiceGenerateEndpoint(svc TokenServiceInterface) endpoint.Endpoi
 		if err != nil {
 			return nil, err
 		}
-		return TokenResponse{Response: *tkns}, nil
+		return &TokenResponse{Response: *tkns}, nil
 	}
 }
 
@@ -81,7 +81,7 @@ func MakeTokenServiceVerifyEndpoint(svc TokenServiceInterface) endpoint.Endpoint
 		req := request.(TokenVerifyRequest)
 
 		tkns, err := svc.VerifyToken(ctx, req)
-		// fmt.Printf(("\nTokens verified - %v\n##", tkns)
+
 		if err != nil {
 			errorMessage := err.(*models.ResponseObject)
 
@@ -97,12 +97,10 @@ func MakeTokenServiceRenewEndpoint(svc TokenServiceInterface) endpoint.Endpoint 
 
 		tkns, err := svc.RenewTokens(ctx, req)
 
-		fmt.Printf("\nEndpoint invoked tkns:%v\nErr:%v\n", tkns, err)
-
 		if err != nil {
-			return TokenResponse{Error: models.ServiceError{Error: err.Error(), Code: http.StatusExpectationFailed}}, nil
+			return &TokenResponse{Error: models.ServiceError{Error: err.Error(), Code: http.StatusExpectationFailed}}, nil
 		}
-		return TokenResponse{Response: *tkns}, nil
+		return tkns, nil
 	}
 }
 
@@ -141,18 +139,15 @@ func (te TokenServiceEndpoints) AffectToken(ctx context.Context, tokenAffectRequ
 
 }
 
-func (te TokenServiceEndpoints) RenewTokens(ctx context.Context, refreshToken TokenRenewRequest) (*models.AccessTokens, error) {
+func (te TokenServiceEndpoints) RenewTokens(ctx context.Context, refreshToken TokenRenewRequest) (*TokenResponse, error) {
 
 	resp, err := te.RenewEndpoint(ctx, refreshToken)
-	fmt.Printf("Renewtokens endpoint - %v", resp)
 	if err != nil {
-		return nil, err
+		println(err.Error())
 	}
 
 	tokenRespone := resp.(TokenResponse)
-
-	fmt.Printf("Renewtokens endpoint after - %v", tokenRespone)
-	return &tokenRespone.Response, nil
+	return &tokenRespone, nil
 
 }
 

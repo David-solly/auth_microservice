@@ -45,7 +45,7 @@ func RedisInit() {
 type TokenServiceInterface interface {
 	Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error)
 	VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{})
-	RenewTokens(ctx context.Context, token TokenRenewRequest) (*models.AccessTokens, error)
+	RenewTokens(ctx context.Context, token TokenRenewRequest) (*TokenResponse, error)
 	AffectToken(ctx context.Context, tokenAffectRequest models.TokenAffectRequest) (*models.TokenAffectResponse, error)
 }
 
@@ -56,8 +56,13 @@ func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (
 	return generateTokenPair(claims)
 }
 
-func (ts TokenService) RenewTokens(ctx context.Context, token TokenRenewRequest) (*models.AccessTokens, error) {
-	return refreshTokenPair(token.RefreshToken)
+func (ts TokenService) RenewTokens(ctx context.Context, token TokenRenewRequest) (*TokenResponse, error) {
+
+	resp, err := refreshTokenPair(token.RefreshToken)
+	if err != nil {
+		return &TokenResponse{Error: models.ServiceError{Error: err.Error(), Code: http.StatusForbidden}}, nil
+	}
+	return &TokenResponse{Response: *resp}, nil
 }
 
 func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{}) {
@@ -94,9 +99,7 @@ func refreshTokenPair(token string) (*models.AccessTokens, error) {
 	refreshClaims, err := FetchRefresh(ids)
 	if err != nil {
 		if strings.Compare(err.Error(), redis.Nil.Error()) == 0 {
-			fmt.Println("Access tokens already removed")
-
-			return nil, errors.New("Session timed out. Please log in... ")
+			return nil, errors.New("Invalid Token")
 		}
 		log.Println(err)
 		return nil, errors.New("Unknown Error caused session time out ")
@@ -107,7 +110,6 @@ func refreshTokenPair(token string) (*models.AccessTokens, error) {
 		id, err := deleteAuth(ids.AccessUuid)
 		if err != nil {
 			if strings.Compare(err.Error(), redis.Nil.Error()) == 0 {
-				fmt.Println("Access token already expired")
 				id = 0
 			} else {
 				return nil, err
@@ -115,14 +117,13 @@ func refreshTokenPair(token string) (*models.AccessTokens, error) {
 		}
 
 		if id < 0 {
-			return nil, errors.New("Error deleting token")
+			return nil, errors.New("Could not process Token")
 		}
 	}
 
 	id, err := deleteAuth(ids.RefreshUUID)
 	if err != nil {
 		if strings.Contains(err.Error(), redis.Nil.Error()) {
-			fmt.Println("Refresh token already expired")
 			id = 0
 		} else {
 			return nil, err
@@ -130,7 +131,7 @@ func refreshTokenPair(token string) (*models.AccessTokens, error) {
 	}
 
 	if id < 0 {
-		return nil, errors.New("Error deleting token")
+		return nil, errors.New("Error Processing Token")
 	}
 
 	return generateTokenPair(refreshClaims)
@@ -179,54 +180,50 @@ func generateTokenPair(claims map[string]string) (*models.AccessTokens, error) {
 }
 
 func verifyAndDeleteToken(token string) (*models.TokenAffectResponse, error) {
-	tokenAuth, claims, err := ExtractTokenMetadata(token, false)
+	ids, _, err := ExtractTokenMetadata(token, true)
 	if err != nil {
-		return &models.TokenAffectResponse{Error: &models.ServiceError{Error: err.Error(), Code: http.StatusUnauthorized}}, nil
+		return nil, err
 	}
 
-	_, userID, err := FetchAuth(tokenAuth)
+	_, err = FetchRefresh(ids)
 	if err != nil {
-		log.Print(err.Error())
-		return &models.TokenAffectResponse{Error: &models.ServiceError{Error: "Supplied Token is Unauthorized", Code: http.StatusUnauthorized}}, nil
+		if strings.Compare(err.Error(), redis.Nil.Error()) == 0 {
+			return nil, errors.New("Invalid Token")
+		}
+		log.Println(err)
+		return nil, errors.New("Unknown Error caused session time out ")
+
 	}
 
-	deleteAvailable := false
-	if userID != "" {
-
-		if id, k := claims["id"]; k {
-
-			if cID, o := id.(string); o {
-
-				if cID == userID {
-					deleteAvailable = true
-				}
+	if ids.AccessUuid != "" {
+		id, err := deleteAuth(ids.AccessUuid)
+		if err != nil {
+			if strings.Compare(err.Error(), redis.Nil.Error()) == 0 {
+				id = 0
+			} else {
+				return nil, err
 			}
 		}
-	} else {
-		if _, k := claims["id"]; !k {
-			deleteAvailable = true
+
+		if id < 0 {
+			return nil, errors.New("Could not process Token")
 		}
 	}
 
-	if !deleteAvailable {
-		return &models.TokenAffectResponse{Error: &models.ServiceError{Error: "Unauthorized to log out", Code: http.StatusUnauthorized}}, nil
-	}
-
-	affected := false
-	if deleteAvailable {
-		rowID, err1 := deleteAuth(tokenAuth.AccessUuid)
-		if err1 != nil {
-			log.Print(err1.Error())
-			return &models.TokenAffectResponse{Error: &models.ServiceError{Error: "Error while logging out", Code: http.StatusUnauthorized}}, nil
+	id, err := deleteAuth(ids.RefreshUUID)
+	if err != nil {
+		if strings.Contains(err.Error(), redis.Nil.Error()) {
+			id = 0
+		} else {
+			return nil, err
 		}
-
-		affected = rowID > 0
 	}
 
-	if !affected {
-		return &models.TokenAffectResponse{Error: &models.ServiceError{Error: "Could not log out", Code: http.StatusUnauthorized}}, nil
+	if id < 0 {
+		return nil, errors.New("Error Processing Token")
 	}
-	rto := models.TokenAffectResponse{EffectApplied: affected}
+
+	rto := models.TokenAffectResponse{EffectApplied: id > 0}
 	return &rto, nil
 }
 
@@ -388,7 +385,7 @@ func VerifyTokenIntegrity(tokenString string, isRfresh bool) (*jwt.Token, error)
 	})
 	if err != nil {
 		log.Print(err)
-		return nil, fmt.Errorf("Invalid token format")
+		return nil, fmt.Errorf("Invalid token")
 	}
 	return token, nil
 }
