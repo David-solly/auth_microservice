@@ -128,6 +128,9 @@ func affectToken(ctx context.Context, service token_grpc.TokenServiceInterface, 
 		ilog.Fatalln(err.Error())
 		return nil, err
 	}
+	if req.DesiredState == models.TokenState_LOGOUT {
+		mesg.Message = "Log-out was successful."
+	}
 	return mesg, nil
 }
 
@@ -364,7 +367,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// Set request timeout
-	r.Use(middleware.Timeout(10 * time.Minute))
+	r.Use(middleware.Timeout(500 * time.Millisecond))
 
 	// Api endpoints
 	r.Handle("/", greethandle)

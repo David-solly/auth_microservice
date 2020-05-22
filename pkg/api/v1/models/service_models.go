@@ -50,6 +50,7 @@ type TokenAffectRequest struct {
 
 type TokenAffectResponse struct {
 	EffectApplied bool          `json:"effect_applied,omitempty"`
+	Message       string        `json:"message,omitempty"`
 	Error         *ServiceError `json:"error,omitempty"`
 }
 
