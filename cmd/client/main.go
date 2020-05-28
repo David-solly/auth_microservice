@@ -150,7 +150,7 @@ func verifyToken(ctx context.Context, service token_grpc.TokenServiceInterface, 
 	return mesg, nil
 }
 
-//parse consule message to endpoint
+//parse consul message to endpoint
 func generateTokenFactory(_ context.Context, method, path string) sd.Factory {
 	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
 
@@ -254,6 +254,7 @@ func main() {
 	port = os.Getenv("PORT")
 	//####################
 
+	servieURL = os.Getenv("SERVICE_URL")
 	var (
 		consulAddr = flag.String("consul.addr", "", "consul address")
 		consulPort = flag.String("consul.port", "", "consul port")
@@ -294,7 +295,6 @@ func main() {
 
 	serviceName := "JWT-Service"
 	instancer := consulsd.NewInstancer(client, logger, serviceName, tags, passingOnly)
-
 	{
 		factory := affectTokenFactory(ctx, "POST", "/affect")
 		endpointer := sd.NewEndpointer(instancer, factory, logger)
@@ -371,11 +371,11 @@ func main() {
 
 	// Api endpoints
 	r.Handle("/", greethandle)
-	r.Handle("/login", loginHandle)
-	r.Handle("/logout", logoutHandle)
-	r.Handle("/refresh", renewhandle)
-	r.Handle("/register", registerhandle)
-	r.Handle("/verify/{serviceID}", verifyhandle)
+	r.Handle("/v1/login", loginHandle)
+	r.Handle("/v1/logout", logoutHandle)
+	r.Handle("/v1/refresh", renewhandle)
+	r.Handle("/v1/register", registerhandle)
+	r.Handle("/v1/verify/{serviceID}", verifyhandle)
 
 	// Interrupt handler.
 	errc := make(chan error)
@@ -489,6 +489,35 @@ func makeBalancedVerifyEndpoint(svc token_grpc.TokenServiceInterface) endpoint.E
 
 func encodeResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
 	w.Header().Add("Content-Type", "application/json")
+	if r, o := response.(models.ResponseObject); o {
+		if r.Error != "" {
+			k, _ := json.Marshal(r)
+
+			w.WriteHeader(r.Code)
+			w.Header().Add("Content-Type", "application/json")
+			w.Header().Add("Content-Length", fmt.Sprintf("%d", len(k)))
+			return json.NewEncoder(w).Encode(r)
+		}
+
+		if r, o := response.(models.AccessTokens); o {
+			k := map[string]interface{}{
+				"tokens": r,
+			}
+			return json.NewEncoder(w).Encode(k)
+
+		}
+
+		if r, o := response.(*models.AccessTokens); o {
+			k := map[string]interface{}{
+				"tokens": r,
+			}
+			return json.NewEncoder(w).Encode(k)
+
+		}
+
+		return json.NewEncoder(w).Encode(r)
+
+	}
 	return json.NewEncoder(w).Encode(response)
 }
 
@@ -499,10 +528,20 @@ func encodeRenewResponse(_ context.Context, w http.ResponseWriter, response inte
 			return json.NewEncoder(w).Encode(r.Error)
 		}
 		if r.Response.RefreshToken == "" {
-			return json.NewEncoder(w).Encode(models.ResponseObject{Error: "Invalid Request token", Code: http.StatusBadRequest})
+			e := models.ResponseObject{Error: "Invalid Request token", Code: http.StatusBadRequest}
+			k, _ := json.Marshal(e)
+
+			w.WriteHeader(e.Code)
+			w.Header().Add("Content-Type", "application/json")
+			w.Header().Add("Content-Length", fmt.Sprintf("%d", len(k)))
+			w.Write(k)
+			return json.NewEncoder(w).Encode(e)
 		}
 
-		return json.NewEncoder(w).Encode(r.Response)
+		k := map[string]interface{}{
+			"tokens": r.Response,
+		}
+		return json.NewEncoder(w).Encode(k)
 
 	}
 	return json.NewEncoder(w).Encode(response)
@@ -512,6 +551,11 @@ func encodeVerifyResponse(_ context.Context, w http.ResponseWriter, response int
 	w.Header().Add("Content-Type", "application/json")
 	if r, o := response.(*models.TokenVerifyResponse); o {
 		if r.Error.Code != 0 {
+			k, _ := json.Marshal(r.Error)
+
+			w.WriteHeader(r.Error.Code)
+			w.Header().Add("Content-Type", "application/json")
+			w.Header().Add("Content-Length", fmt.Sprintf("%d", len(k)))
 			return json.NewEncoder(w).Encode(r.Error)
 		}
 
@@ -525,6 +569,11 @@ func encodeAffectResponse(_ context.Context, w http.ResponseWriter, response int
 	w.Header().Add("Content-Type", "application/json")
 	if r, o := response.(*models.TokenAffectResponse); o {
 		if r.Error != nil {
+			k, _ := json.Marshal(r.Error)
+
+			w.WriteHeader(r.Error.Code)
+			w.Header().Add("Content-Type", "application/json")
+			w.Header().Add("Content-Length", fmt.Sprintf("%d", len(k)))
 			return json.NewEncoder(w).Encode(r.Error)
 		}
 
@@ -532,13 +581,6 @@ func encodeAffectResponse(_ context.Context, w http.ResponseWriter, response int
 
 	}
 	return json.NewEncoder(w).Encode(response)
-}
-
-// errorer is implemented by all concrete response types that may contain
-// errors. It allows us to change the HTTP response code without needing to
-// trigger an endpoint (transport-level) error.
-type errorer interface {
-	error() error
 }
 
 // encode error

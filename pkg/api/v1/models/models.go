@@ -16,6 +16,8 @@ type User struct {
 	Password string                 `json:"password"`
 	PII      UserPII                `json:"details,omitempty"`
 	Claims   map[string]interface{} `json:"claims,omitempty"`
+	Error    string                 `json:"error,omitempty"`
+	Code     int                    `json:"code,omitempty"`
 }
 
 // Maps the claims from the request to be encoded in the jwt

@@ -132,6 +132,7 @@ func main() {
 	error := <-errChan
 	// deregister service
 	registar.Deregister()
+
 	log.Fatalln(error)
 
 }

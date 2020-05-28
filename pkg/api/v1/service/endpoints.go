@@ -27,7 +27,7 @@ type TokenRenewRequest struct {
 }
 
 type TokenResponse struct {
-	Response models.AccessTokens
+	Response models.AccessTokens `json:"tokens,omitempty"`
 	Error    models.ServiceError
 }
 
