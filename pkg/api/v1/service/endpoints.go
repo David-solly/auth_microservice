@@ -144,8 +144,13 @@ func (te TokenServiceEndpoints) RenewTokens(ctx context.Context, refreshToken To
 	resp, err := te.RenewEndpoint(ctx, refreshToken)
 	if err != nil {
 		println(err.Error())
+		return &TokenResponse{Error: models.ServiceError{Error: err.Error(), Code: 500}}, nil
+
 	}
 
+	if resp == nil {
+		return &TokenResponse{Error: models.ServiceError{Error: "Error whilst refreshing tokens", Code: 500}}, nil
+	}
 	tokenRespone := resp.(TokenResponse)
 	return &tokenRespone, nil
 
