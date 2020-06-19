@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
-	"net/url"
+
 	"os"
 	"os/signal"
-	"strings"
+
 	"syscall"
 
 	pb "github.com/David-solly/auth_microservice/pkg/api/v1"
-	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
-	token_consul "github.com/David-solly/auth_microservice/pkg/api/v1/registration"
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
+	"github.com/David-solly/consul_hcsd/discover"
+	"github.com/David-solly/consul_hcsd/discover/models"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 )
@@ -44,19 +43,21 @@ func main() {
 		gRPCAddr = flag.String("grpc", ""+*advertiseAddr+":"+*advertisePort,
 			"gRPC listen address")
 	)
-
-	flag.Parse()
-	var (
-		gRPCAddrHealth = strings.Replace(*gRPCAddr, ":"+*advertisePort, ":"+*advertiseHealthPort, 1)
-	)
 	flag.Parse()
 
 	// Register Service to Consul
-	registar := token_consul.RegisterService(*consulAddr,
-		*consulPort,
-		*advertiseAddr,
-		*advertisePort,
-		*advertiseHealthPort)
+	discover.ConfigureAndAdvertise(
+		&models.AddressConfig{
+			ConsulAddr:          *consulAddr,
+			ConsulPort:          *consulPort,
+			AdvertiseAddr:       *advertiseAddr,
+			AdvertisePort:       *advertisePort,
+			AdvertiseHealthPort: *advertiseHealthPort},
+		&models.ServiceConfig{
+			ID:   "JWT",
+			Name: "JWT Service",
+			Tags: []string{"generate", "refresh", "verify"},
+		})
 
 	ctx := context.Background()
 
@@ -74,19 +75,6 @@ func main() {
 		RenewEndpoint:    token_grpc.MakeTokenServiceRenewEndpoint(svc),
 	}
 
-	var svcH token_grpc.Health
-	svcH = token_grpc.HealthService{}
-	// svcH = token_grpc.LoggingMiddlewareHealth(logger)(svcH)
-
-	check := token_grpc.MakeHealthServiceCheckEndpoint(svcH)
-	watch := token_grpc.MakeHealthServiceWatchEndpoint(svcH)
-
-	// check = token_grpc.NewTokenBucketLimitter(rlbucket)(check)
-	endpointsHealth := token_grpc.EndpointsConsul{
-		ConsulHealthCheckEndpoint: check,
-		ConsulHealthWatchEndpoint: watch,
-	}
-
 	//execute grpc server
 	go func() {
 		listener, err := net.Listen("tcp", *gRPCAddr)
@@ -98,29 +86,9 @@ func main() {
 		handler := token_grpc.NewGRPCServer(ctx, endpoints)
 		gRPCServer := grpc.NewServer()
 		pb.RegisterTokenServiceServer(gRPCServer, handler)
-		registar.Register()
+
 		fmt.Printf("Service info %v", gRPCServer.GetServiceInfo())
 		errChan <- gRPCServer.Serve(listener)
-	}()
-
-	go func() {
-		fmt.Println("starting health server")
-		listener, err := net.Listen("tcp", gRPCAddrHealth)
-		if err != nil {
-			errChan <- err
-			return
-		}
-		handler := token_grpc.NewGRPCServerHealth(ctx, endpointsHealth)
-		gRPCServer := grpc.NewServer()
-		hc.RegisterHealthServer(gRPCServer, handler)
-		fmt.Printf("Service info %v", gRPCServer.GetServiceInfo())
-		errChan <- gRPCServer.Serve(listener)
-	}()
-
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-		errChan <- fmt.Errorf("%s", <-c)
 	}()
 
 	go func() {
@@ -130,17 +98,10 @@ func main() {
 	}()
 	//notifyOnStart()
 	error := <-errChan
+	discover.ErrChanHC <- error
 	// deregister service
-	registar.Deregister()
 
 	log.Fatalln(error)
-
-}
-
-func notifyOnStart() {
-
-	///braodcast start command
-	http.PostForm("localhost:8080/v1/discover/service/BDg7tZZ2WhKPYJgsBeCgBokhUDshPcwNG1P0seddkHnsTbVB4iCTjxctoUjmQ8F1Dg3xCqgewnP5PbGmXMs4zrVvpVFYQQR43wHb", url.Values{})
 
 }
 

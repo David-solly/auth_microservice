@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
 	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
 	"github.com/go-kit/kit/endpoint"
-	"google.golang.org/grpc"
 )
 
 type TokenServiceEndpoints struct {
@@ -183,30 +181,4 @@ func (te TokenServiceEndpoints) VerifyToken(ctx context.Context, tokenToverify T
 
 	return nil, models.ResponseObject{Error: fmt.Sprintf("Internal Error processsing verification"), Code: http.StatusBadRequest}
 
-}
-
-func MakeHealthServiceCheckEndpoint(svc Health) endpoint.Endpoint {
-	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		req := request.(HealthServiceRequest)
-		healthStatus, err := svc.Check(ctx, req.Service)
-		if err != nil {
-			return HealthServiceResponse{Status: HealthCheckResponse_UNKNOWN}, err
-		}
-
-		return HealthServiceResponse{Status: healthStatus}, nil
-	}
-}
-
-func MakeHealthServiceWatchEndpoint(svc Health) endpoint.Endpoint {
-	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		return HealthServiceResponse{Status: HealthCheckResponse_UNKNOWN}, nil
-	}
-}
-
-type HealthWatchServer struct {
-	grpc.ServerStream
-}
-
-func (x *HealthWatchServer) Send(m *hc.HealthCheckResponse) error {
-	return x.ServerStream.SendMsg(m)
 }

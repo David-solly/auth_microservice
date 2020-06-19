@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	pb "github.com/David-solly/auth_microservice/pkg/api/v1"
-	hc "github.com/David-solly/auth_microservice/pkg/api/v1/hc"
 	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
 )
 
@@ -160,33 +159,5 @@ func DecodeGRPCTokenVerifyResponse(_ context.Context, r interface{}) (interface{
 	return &models.TokenVerifyResponse{
 		Error: models.ServiceError{
 			Error: "Unknown error 123res", Code: http.StatusInternalServerError},
-	}, nil
-}
-
-///Consul Health service checks
-
-func EncodeGRPCHealthServiceRequest(_ context.Context, r interface{}) (interface{}, error) {
-	req := r.(HealthServiceRequest)
-	return &hc.HealthCheckRequest{Service: req.Service}, nil
-}
-
-func DecodeGRPCHealthServiceRequest(ctx context.Context, r interface{}) (interface{}, error) {
-	req := r.(*hc.HealthCheckRequest)
-	return HealthServiceRequest{
-		Service: req.Service,
-	}, nil
-}
-
-//response
-
-func EncodeGRPCHealthServiceResponse(_ context.Context, r interface{}) (interface{}, error) {
-	resp := r.(HealthServiceResponse)
-	return &hc.HealthCheckResponse{Status: hc.HealthCheckResponse_ServingStatus(resp.Status)}, nil
-}
-
-func DecodeGRPCHealthServiceResponse(ctx context.Context, r interface{}) (interface{}, error) {
-	resp := r.(*hc.HealthCheckResponse)
-	return HealthServiceResponse{
-		Status: int(resp.Status),
 	}, nil
 }
