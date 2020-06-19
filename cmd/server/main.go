@@ -45,20 +45,6 @@ func main() {
 	)
 	flag.Parse()
 
-	// Register Service to Consul
-	discover.ConfigureAndAdvertise(
-		&models.AddressConfig{
-			ConsulAddr:          *consulAddr,
-			ConsulPort:          *consulPort,
-			AdvertiseAddr:       *advertiseAddr,
-			AdvertisePort:       *advertisePort,
-			AdvertiseHealthPort: *advertiseHealthPort},
-		&models.ServiceConfig{
-			ID:   "JWT",
-			Name: "JWT Service",
-			Tags: []string{"generate", "refresh", "verify"},
-		})
-
 	ctx := context.Background()
 
 	// init lorem service
@@ -86,7 +72,6 @@ func main() {
 		handler := token_grpc.NewGRPCServer(ctx, endpoints)
 		gRPCServer := grpc.NewServer()
 		pb.RegisterTokenServiceServer(gRPCServer, handler)
-
 		fmt.Printf("Service info %v", gRPCServer.GetServiceInfo())
 		errChan <- gRPCServer.Serve(listener)
 	}()
@@ -96,6 +81,21 @@ func main() {
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		errChan <- fmt.Errorf("%s", <-c)
 	}()
+
+	// Register Service to Consul
+	discover.ConfigureAndAdvertise(
+		&models.AddressConfig{
+			ConsulAddr:          *consulAddr,
+			ConsulPort:          *consulPort,
+			AdvertiseAddr:       *advertiseAddr,
+			AdvertisePort:       *advertisePort,
+			AdvertiseHealthPort: *advertiseHealthPort},
+		&models.ServiceConfig{
+			ID:   "JWT",
+			Name: "JWT-Service",
+			Tags: []string{"jwt", "generate", "refresh", "verify"},
+		})
+
 	//notifyOnStart()
 	error := <-errChan
 	discover.ErrChanHC <- error

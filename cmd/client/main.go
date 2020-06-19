@@ -285,7 +285,7 @@ func main() {
 
 	ctx := context.Background()
 
-	tags := []string{"jwt generate", "yea-buddy!!!"}
+	tags := []string{"jwt", "generate", "refresh", "verify"}
 	passingOnly := true
 	duration := 500 * time.Millisecond
 	var generateEndpoint endpoint.Endpoint
