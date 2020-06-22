@@ -10,8 +10,8 @@ RUN mkdir /build
 COPY . /build/
 WORKDIR /build
 
-COPY ./.netrc /root/.netrc
-RUN chmod 600 /root/.netrc
+COPY .netrc /.netrc
+RUN chmod 600 /.netrc
 
 COPY go.mod .
 COPY go.sum .
@@ -19,7 +19,7 @@ COPY go.sum .
 RUN go mod download
 
 #delete the netrc file after use
-RUN rm -f /root/.netrc
+RUN rm -f /.netrc
 #import code to build - not very optimistic at this stage
 COPY ./ ./
 
