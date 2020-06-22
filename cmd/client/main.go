@@ -25,7 +25,6 @@ import (
 	"github.com/go-kit/kit/sd/lb"
 	ht "github.com/go-kit/kit/transport/http"
 	"github.com/hashicorp/consul/api"
-	"github.com/joho/godotenv"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -247,9 +246,9 @@ func main() {
 	// TODO:
 	//Remove for production, already loads on a different flow
 	//####################
-	if err := godotenv.Load("../../.env"); err != nil {
-		ilog.Fatalln("Server could not load environmental variables")
-	}
+	// if err := godotenv.Load("../../.env"); err != nil {
+	// 	ilog.Fatalln("Server could not load environmental variables")
+	// }
 
 	port = os.Getenv("PORT")
 	//####################
@@ -388,7 +387,7 @@ func main() {
 	// HTTP transport.
 	go func() {
 		logger.Log("transport", "HTTP", "addr", "8080")
-		errc <- http.ListenAndServe(":8080", r)
+		errc <- http.ListenAndServe(":"+port, r)
 	}()
 
 	// Run!
