@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	router = chi.NewRouter()
-	// port      = os.Getenv("PORT")
+	router    = chi.NewRouter()
+	port      string
 	servieURL string
 )
 

@@ -16,7 +16,8 @@ import (
 	grpcClient "github.com/David-solly/auth_microservice/cmd/client/client"
 	models "github.com/David-solly/auth_microservice/pkg/api/v1/models"
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
-	"github.com/David-solly/consul_hcsd/discover"
+	cd1 "github.com/David-solly/consul_hcsd/discover"
+	cd1m "github.com/David-solly/consul_hcsd/discover/models"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-kit/kit/endpoint"
@@ -258,15 +259,13 @@ func main() {
 		advertiseAddr       = flag.String("advertise.addr", "", "advertise address")
 		advertisePort       = flag.String("advertise.port", "", "advertise port")
 		advertiseHealthPort = flag.String("health.port", "", "health port")
-		servieURL           = flag.String("service.add", "", "service address")
+		servieURL1          = flag.String("service.add", "", "service address")
 	)
 	flag.Parse()
 
 	// port = os.Getenv("PORT")
 	//####################
-
-	port = advertisePort
-	// servieURL = os.Getenv("SERVICE_URL")
+	servieURL = *servieURL1
 
 	flag.Parse()
 
@@ -396,17 +395,17 @@ func main() {
 	// HTTP transport.
 	go func() {
 		logger.Log("transport", "HTTP", "addr", "8080")
-		errc <- http.ListenAndServe(""+advertiseAddr+":"+port, r)
+		errc <- http.ListenAndServe(""+*advertiseAddr+":"+*advertisePort, r)
 	}()
 	// Register Service to Consul
-	go discover.ConfigureAndAdvertise(
-		&models.AddressConfig{
+	go cd1.ConfigureAndAdvertise(
+		&cd1m.AddressConfig{
 			ConsulAddr:          *consulAddr,
 			ConsulPort:          *consulPort,
 			AdvertiseAddr:       *advertiseAddr,
 			AdvertisePort:       *advertisePort,
 			AdvertiseHealthPort: *advertiseHealthPort},
-		&models.ServiceConfig{
+		&cd1m.ServiceConfig{
 			ID:   "JWT-API",
 			Name: "JWT-Gateway",
 			Tags: []string{"jwt", "api", "gateway", "rest"},
@@ -414,7 +413,7 @@ func main() {
 
 	//notifyOnStart()
 	error := <-errc
-	discover.ErrChanHC <- error
+	cd1.ErrChanHC <- error
 
 	// Run!
 	logger.Log("exit", <-errc)
