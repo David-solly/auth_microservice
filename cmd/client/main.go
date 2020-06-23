@@ -395,7 +395,7 @@ func main() {
 	// HTTP transport.
 	go func() {
 		logger.Log("transport", "HTTP", "addr", *advertisePort)
-		errc <- http.ListenAndServe(":"+*advertisePort, r)
+		errc <- http.ListenAndServe("0.0.0.0:"+*advertisePort, r)
 	}()
 	// Register Service to Consul
 	go cd1.ConfigureAndAdvertise(
