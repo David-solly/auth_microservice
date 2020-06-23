@@ -1,4 +1,5 @@
 .env
 .netrc
 .docker_build/
+.vendor/
 bin/

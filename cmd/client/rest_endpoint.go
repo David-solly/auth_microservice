@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/David-solly/auth_microservice/pkg/api/v1/models"
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
@@ -15,8 +14,8 @@ import (
 )
 
 var (
-	router    = chi.NewRouter()
-	port      = os.Getenv("PORT")
+	router = chi.NewRouter()
+	// port      = os.Getenv("PORT")
 	servieURL string
 )
 

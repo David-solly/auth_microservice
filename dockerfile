@@ -1,29 +1,34 @@
 FROM golang:rc-alpine3.12@sha256:98187f74d7837b7ad75acc09390cd31d87904d43ca590a7ff4f6f56bc3f31710 as builder
 #Use go modules
 ENV GO111MODULE=on
+
 #user and usergroup for application- non root user
 RUN mkdir /user && \
     echo 'nobody:x:65534:65534:nobody:/:' > /user/passwd && \
     echo 'nobody:x:65534:' > /user/group
+
 RUN apk update && apk add --no-cache git ca-certificates tzdata
+
 RUN mkdir /build
-COPY . /build/
+COPY ./cmd/client /build/
 WORKDIR /build
+RUN ls -a /build
+COPY netrc /root/.netrc
+RUN ls -a /root
 
-COPY .netrc /.netrc
-RUN chmod 600 /.netrc
-
-COPY go.mod .
-COPY go.sum .
-
-RUN go mod download
+RUN export GIT_TERMINAL_PROMPT=1
 
 #delete the netrc file after use
-RUN rm -f /.netrc
+# RUN rm -f ~/.netrc
 #import code to build - not very optimistic at this stage
-COPY ./ ./
+COPY ./cmd/client ./
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o authclient /cmd/client
+COPY ./go.mod ./go.sum ./ ./vendor ./
+
+
+# RUN go mod download
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o authclient ./cmd/client
 FROM scratch AS final
 LABEL author="David Solly"
 

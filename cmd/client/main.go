@@ -16,6 +16,7 @@ import (
 	grpcClient "github.com/David-solly/auth_microservice/cmd/client/client"
 	models "github.com/David-solly/auth_microservice/pkg/api/v1/models"
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
+	"github.com/David-solly/consul_hcsd/discover"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-kit/kit/endpoint"
@@ -250,14 +251,22 @@ func main() {
 	// 	ilog.Fatalln("Server could not load environmental variables")
 	// }
 
-	port = os.Getenv("PORT")
+	// parse variable from input command
+	var (
+		consulAddr          = flag.String("consul.addr", "", "consul address")
+		consulPort          = flag.String("consul.port", "", "consul port")
+		advertiseAddr       = flag.String("advertise.addr", "", "advertise address")
+		advertisePort       = flag.String("advertise.port", "", "advertise port")
+		advertiseHealthPort = flag.String("health.port", "", "health port")
+		servieURL           = flag.String("service.add", "", "service address")
+	)
+	flag.Parse()
+
+	// port = os.Getenv("PORT")
 	//####################
 
-	servieURL = os.Getenv("SERVICE_URL")
-	var (
-		consulAddr = flag.String("consul.addr", "", "consul address")
-		consulPort = flag.String("consul.port", "", "consul port")
-	)
+	port = advertisePort
+	// servieURL = os.Getenv("SERVICE_URL")
 
 	flag.Parse()
 
@@ -387,8 +396,25 @@ func main() {
 	// HTTP transport.
 	go func() {
 		logger.Log("transport", "HTTP", "addr", "8080")
-		errc <- http.ListenAndServe(":"+port, r)
+		errc <- http.ListenAndServe(""+advertiseAddr+":"+port, r)
 	}()
+	// Register Service to Consul
+	go discover.ConfigureAndAdvertise(
+		&models.AddressConfig{
+			ConsulAddr:          *consulAddr,
+			ConsulPort:          *consulPort,
+			AdvertiseAddr:       *advertiseAddr,
+			AdvertisePort:       *advertisePort,
+			AdvertiseHealthPort: *advertiseHealthPort},
+		&models.ServiceConfig{
+			ID:   "JWT-API",
+			Name: "JWT-Gateway",
+			Tags: []string{"jwt", "api", "gateway", "rest"},
+		})
+
+	//notifyOnStart()
+	error := <-errc
+	discover.ErrChanHC <- error
 
 	// Run!
 	logger.Log("exit", <-errc)
