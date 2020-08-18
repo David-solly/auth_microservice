@@ -10,19 +10,59 @@ import (
 	"github.com/docker/docker/pkg/testutil/assert"
 )
 
-const accesstokenToTest = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfdXVpZCI6IjFhYjRmMGFmLTEzNGItNGMxMC05NjRhLWQwNjU5YzFiMmNkMiIsImNsZWFyYW5jZSI6ImRlbHRhIiwiZXhwIjoxNTkwMDE4NDYxLCJpZCI6IjIiLCJzZXJ2aWNlIjoiY29tLmJpZy5iZW4ifQ.z687q82iP42VWRlWyR3gFrJhsMN_6YDM3P7v5rFL_G4"
-const refreshTokenToTest = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE1OTA2MjIzNjEsImlkIjoiMiIsInJlZnJlc2hfdXVpZCI6IjM2OThiMTg2LTBkNTctNDcxZS05N2ZjLTQ3Y2ViOGZkOWRhYSJ9.IqPJzW51-ruOwSHkQmjpcoYHApddUrlgO6GfiZhrV-I"
+var (
+	expiredToken       = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfdXVpZCI6IjFhYjRmMGFmLTEzNGItNGMxMC05NjRhLWQwNjU5YzFiMmNkMiIsImNsZWFyYW5jZSI6ImRlbHRhIiwiZXhwIjoxNTkwMDE4NDYxLCJpZCI6IjIiLCJzZXJ2aWNlIjoiY29tLmJpZy5iZW4ifQ.z687q82iP42VWRlWyR3gFrJhsMN_6YDM3P7v5rFL_G4"
+	accesstokenToTest  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfdXVpZCI6IjFhYjRmMGFmLTEzNGItNGMxMC05NjRhLWQwNjU5YzFiMmNkMiIsImNsZWFyYW5jZSI6ImRlbHRhIiwiZXhwIjoxNTkwMDE4NDYxLCJpZCI6IjIiLCJzZXJ2aWNlIjoiY29tLmJpZy5iZW4ifQ.z687q82iP42VWRlWyR3gFrJhsMN_6YDM3P7v5rFL_G4"
+	refreshTokenToTest = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE1OTA2MjIzNjEsImlkIjoiMiIsInJlZnJlc2hfdXVpZCI6IjM2OThiMTg2LTBkNTctNDcxZS05N2ZjLTQ3Y2ViOGZkOWRhYSJ9.IqPJzW51-ruOwSHkQmjpcoYHApddUrlgO6GfiZhrV-I"
+	claimsToRenew      = map[string]string{"service": "testing.service", "id": "123"}
+	UUID, invalidUUID  string
+)
 
 func setEnvirons() {
 	os.Setenv("JWT_SECRET", "superduperdupersecuresecret23232string6568_55")
 	os.Setenv("JWT_R_SECRET", "superduperdupersecsjld_kdkjuresecret23232string2d545565656_")
+	RedisInit()
+	initTokensVars()
+
+}
+func initTokensVars() {
+
+	tokens, _ := generateTokenPair(claimsToRenew)
+	accesstokenToTest = tokens.AccessToken
+	refreshTokenToTest = tokens.RefreshToken
+
+	meta, _, _ := ExtractTokenMetadata(refreshTokenToTest, true)
+	UUID = meta.RefreshUUID
+	invalidUUID = "0c881322-f4fe-49c0-8619-7ada6bb642a4"
+
+}
+
+func TestRedisConnection(t *testing.T) {
+	t.Run("INIT redis db connection", func(t *testing.T) {
+		k, err := RedisInit()
+		assert.NilError(t, err)
+		assert.Equal(t, k, "PONG")
+	})
+
+}
+
+func TestJWTGeneration(t *testing.T) {
+	setEnvirons()
+	t.Run("GENERATE jwt token pair", func(t *testing.T) {
+		tokens, err := generateTokenPair(claimsToRenew)
+		assert.NilError(t, err)
+		assert.Equal(t, reflect.ValueOf(tokens).IsNil(), false)
+		assert.Equal(t, tokens.AccessToken != "", true)
+		assert.Equal(t, tokens.RefreshToken != "", true)
+
+	})
 }
 
 func TestJWTExtraction(t *testing.T) {
 	setEnvirons()
 	t.Run("VERIFY and EXTRACT jwt token", func(t *testing.T) {
 		got, err := VerifyTokenIntegrity(accesstokenToTest, false)
-		assert.Error(t, err, "Invalid")
+		assert.NilError(t, err)
 		assert.NotNil(t, got)
 
 	})
@@ -50,32 +90,27 @@ func TestJWTExtraction(t *testing.T) {
 }
 
 func TestReadingRefreshData(t *testing.T) {
-	RedisInit()
-	k := models.AccessDetails{RefreshUUID: "c635b068-8719-449d-ad66-5298f6046f51"}
+	setEnvirons()
+	k := models.AccessDetails{RefreshUUID: UUID}
 	t.Run("VERIFY and REDIS READ claims from UUID", func(t *testing.T) {
 		got, err := FetchRefresh(&k)
 		assert.NilError(t, err)
 		assert.Equal(t, reflect.TypeOf(got), reflect.TypeOf(map[string]string{}))
+		assert.Equal(t, got["service"], "testing.service")
 
 	})
 	t.Run("VERIFY and REDIS READ claims from UUID Fail", func(t *testing.T) {
-		got, err := FetchRefresh(&k)
-		assert.NilError(t, err)
+		got, err := FetchRefresh(&models.AccessDetails{RefreshUUID: invalidUUID})
+		assert.Error(t, err, "nil")
 		assert.Equal(t, reflect.TypeOf(got), reflect.TypeOf(map[string]string{}))
 
-	})
-
-	t.Run("SHOuld fail and REDIS READ claims from UUID", func(t *testing.T) {
-		got, err := FetchRefresh(&k)
-		assert.NilError(t, err)
-		assert.Equal(t, reflect.TypeOf(got), reflect.TypeOf(map[string]string{}))
 	})
 
 }
 
 func TestRefreshToken(t *testing.T) {
 	setEnvirons()
-	validRefreshToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfdXVpZCI6ImMwMjJjZjA5LTdjNzYtNGE2NC05MTQ3LWZjZWNkZTlhMDQwYSIsImV4cCI6MTU5MDY4NTE0NCwiaWQiOiIyIiwicmVmcmVzaF91dWlkIjoiOGE4YTM4ODYtNDgzYS00ZTRiLWIzYzgtNTVlNDk5YmM1Y2M5In0.xT6243HksaOmEhCFj1vZxDJo1d55J5UYOifdJ8x8f0w"
+	validRefreshToken := refreshTokenToTest
 	ids := &models.AccessDetails{}
 	claimsToRenew := map[string]string{}
 	t.Run("VERIFY Token then Extract UUID", func(t *testing.T) {
@@ -141,7 +176,7 @@ func TestRefreshToken(t *testing.T) {
 }
 
 func BenchmarkExtract(t *testing.B) {
-	os.Setenv("JWT_SECRET", "superduperdupersecuresecret23232string6568_55")
+	setEnvirons()
 	t.Run("EXTRACT valid TOKEN from JWT", func(t *testing.B) {
 		for i := 0; i < t.N; i++ {
 			_, _ = VerifyTokenIntegrity(accesstokenToTest, false)

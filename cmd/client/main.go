@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,11 +30,6 @@ import (
 	"github.com/hashicorp/consul/api"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-)
-
-var (
-	// ErrBadRouting is returned when an expected path variable is missing.
-	ErrBadRouting = errors.New("inconsistent mapping between route and handler (programmer error)")
 )
 
 func makeConnection(conn *grpc.ClientConn) token_grpc.TokenServiceInterface {
@@ -155,29 +151,10 @@ func verifyToken(ctx context.Context, service token_grpc.TokenServiceInterface, 
 func generateTokenFactory(_ context.Context, method, path string) sd.Factory {
 	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
 
-		// ####### ----START----for http #############
-		// if !strings.HasPrefix(instance, "http") {
-		// 	instance = "http://" + instance
-		// }
-
 		fmt.Println("@@@@@@@@ received from consul")
 		fmt.Println(instance)
 		fmt.Println(method)
 		fmt.Println(path)
-
-		// tgt, err := url.Parse(instance)
-		// if err != nil {
-		// 	return nil, nil, err
-		// }
-		// tgt.Path = path
-
-		// var (
-		// 	enc ht.EncodeRequestFunc
-		// 	dec ht.DecodeResponseFunc
-		// )
-		// enc, dec = encodeLoremRequest, decodeLoremResponse
-		//return ht.NewClient(method, tgt, enc, dec).Endpoint(), nil, nil
-		//######### ----END---- for http endpoint
 
 		conn1, err := dialConnection(&instance)
 		if err != nil {
@@ -267,7 +244,16 @@ func main() {
 	//####################
 	servieURL = *servieURL1
 
-	flag.Parse()
+	if envAdd := os.Getenv("POD_IP"); envAdd != "" {
+		repl := strings.ReplaceAll(envAdd, ".", "-")
+		if advertiseAddr != nil {
+			newAdd := fmt.Sprintf("%s.%s", repl, *advertiseAddr)
+			advertiseAddr = &newAdd
+		} else {
+			advertiseAddr = &envAdd
+		}
+
+	}
 
 	// Logging domain.
 	var logger log.Logger

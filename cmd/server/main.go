@@ -4,8 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net"
+	"strings"
 
 	"os"
 	"os/signal"
@@ -16,16 +16,30 @@ import (
 	token_grpc "github.com/David-solly/auth_microservice/pkg/api/v1/service"
 	"github.com/David-solly/consul_hcsd/discover"
 	"github.com/David-solly/consul_hcsd/discover/models"
-	"github.com/joho/godotenv"
+	"github.com/go-kit/kit/log"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	if err := godotenv.Load("../../.env"); err != nil {
-		log.Fatal("Server could not load environmental variables")
+	// #### For debugging and local testing
+	// if err := godotenv.Load("../../.env"); err != nil {
+	// 	log.Fatal("Server could not load environmental variables")
+	// }
+
+	// Logging domain.
+	var logger log.Logger
+	{
+		logger = log.NewLogfmtLogger(os.Stderr)
+		logger = log.With(logger, "ts", log.DefaultTimestampUTC)
+		logger = log.With(logger, "caller", log.DefaultCaller)
 	}
 
-	token_grpc.RedisInit()
+	errChan := make(chan error)
+
+	if _, err := token_grpc.RedisInit(); err != nil {
+		logger.Log("err", err)
+		os.Exit(1)
+	}
 
 	//fmt.Print"Starting grpc server...")
 
@@ -39,6 +53,17 @@ func main() {
 	)
 	flag.Parse()
 
+	if envAdd := os.Getenv("POD_IP"); envAdd != "" {
+		repl := strings.ReplaceAll(envAdd, ".", "-")
+		if advertiseAddr != nil {
+			newAdd := fmt.Sprintf("%s.%s", repl, *advertiseAddr)
+			advertiseAddr = &newAdd
+		} else {
+			advertiseAddr = &envAdd
+		}
+
+	}
+
 	var (
 		gRPCAddr = flag.String("grpc", ""+*advertiseAddr+":"+*advertisePort,
 			"gRPC listen address")
@@ -50,8 +75,6 @@ func main() {
 	// init lorem service
 	var svc token_grpc.TokenServiceInterface
 	svc = token_grpc.TokenService{}
-
-	errChan := make(chan error)
 
 	// creating Endpoints struct
 	endpoints := token_grpc.TokenServiceEndpoints{
@@ -98,10 +121,9 @@ func main() {
 
 	//notifyOnStart()
 	error := <-errChan
+	logger.Log("err", error)
 	discover.ErrChanHC <- error
 	// deregister service
-
-	log.Fatalln(error)
 
 }
 
