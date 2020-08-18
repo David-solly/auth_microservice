@@ -1,5 +1,6 @@
 .env
 .netrc
+.vscode
 .docker_build/
 vendor/
 bin/

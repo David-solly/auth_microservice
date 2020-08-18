@@ -18,15 +18,11 @@ import (
 	"github.com/twinj/uuid"
 )
 
-const (
-	// apiVersion is version of API is provided by server
-	apiVersion = "v1"
-)
-
 var client *redis.Client
 
-func RedisInit() {
-	//Initializing redis
+func RedisInit() (string, error) {
+	// Initializing redis
+	// From Deployment environmental variables
 	dsn := os.Getenv("REDIS_DSN")
 	if len(dsn) == 0 {
 		dsn = "192.168.99.100:6379"
@@ -34,12 +30,13 @@ func RedisInit() {
 	client = redis.NewClient(&redis.Options{
 		Addr: dsn, //redis port
 	})
-	_, err := client.Ping().Result()
+	k, err := client.Ping().Result()
 	if err != nil {
-		panic(err)
+		return k, err
 	}
 
 	fmt.Println("Redis server - Online ..........")
+	return k, nil
 }
 
 type TokenServiceInterface interface {
@@ -52,10 +49,14 @@ type TokenServiceInterface interface {
 type TokenService struct {
 }
 
+// Generate :
+// Generate the Token Pair
 func (ts TokenService) Generate(ctx context.Context, claims map[string]string) (*models.AccessTokens, error) {
 	return generateTokenPair(claims)
 }
 
+// RenewTokens :
+// Re-Generate a new token pair
 func (ts TokenService) RenewTokens(ctx context.Context, token TokenRenewRequest) (*TokenResponse, error) {
 
 	resp, err := refreshTokenPair(token.RefreshToken)
@@ -65,6 +66,8 @@ func (ts TokenService) RenewTokens(ctx context.Context, token TokenRenewRequest)
 	return &TokenResponse{Response: *resp}, nil
 }
 
+// VerifyToken :
+// Claim verification and authorisation
 func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerifyRequest) (*models.TokenVerifyResponse, interface{}) {
 	resp, err := verifyAndGetTokenClaims(tokenToverify.Token, tokenToverify.Service)
 	if err != nil {
@@ -74,6 +77,8 @@ func (ts TokenService) VerifyToken(ctx context.Context, tokenToverify TokenVerif
 	return resp, nil
 }
 
+// AffectToken :
+// Expandable service module API
 func (ts TokenService) AffectToken(ctx context.Context, tokenToAffect models.TokenAffectRequest) (*models.TokenAffectResponse, error) {
 	switch tokenToAffect.DesiredState {
 
@@ -273,7 +278,12 @@ func createAuth(userid string, td *models.TokenDetails, claims map[string]string
 	rt := time.Unix(td.RtExpiry, 0)
 	now := time.Now()
 
-	errAccess := client.Set(td.AccessUUID, userid, at.Sub(now)).Err()
+	if client == nil {
+		return nil, errors.New("Redis client is nil")
+	}
+
+	base := client.Set(td.AccessUUID, userid, at.Sub(now))
+	errAccess := base.Err()
 	if errAccess != nil {
 		return nil, errAccess
 	}

@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc"
 )
 
+// New : gRPc callable Endpoints and data handlers
 func New(conn *grpc.ClientConn) token_grpc.TokenServiceInterface {
 	var tokenEndpoint = grpctransport.NewClient(
 		conn, "v1.TokenService", "Generate",
